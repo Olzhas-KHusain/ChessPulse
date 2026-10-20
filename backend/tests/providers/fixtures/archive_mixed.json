@@ -1,0 +1,136 @@
+{
+  "games": [
+    {
+      "url": "https://www.chess.com/game/live/1000000001",
+      "pgn": "[Event \"Live Chess\"]\n[Site \"Chess.com\"]\n[Date \"2026.09.21\"]\n[White \"example_player\"]\n[Black \"Rival_One\"]\n[Result \"1-0\"]\n[ECO \"B20\"]\n[ECOUrl \"https://www.chess.com/openings/Sicilian-Defense\"]\n[TimeControl \"600+5\"]\n[Termination \"example_player won by resignation\"]\n\n1. e4 c5 2. Nf3 d6 1-0\n",
+      "time_control": "600+5",
+      "end_time": 1790000000,
+      "rated": true,
+      "accuracies": { "white": 81.2, "black": 70.4 },
+      "tcn": "mC0Kgv",
+      "uuid": "00000000-0000-0000-0000-000000000001",
+      "initial_setup": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "fen": "rnbqkbnr/pp2pppp/3p4/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 3",
+      "time_class": "rapid",
+      "rules": "chess",
+      "white": {
+        "rating": 1523,
+        "result": "win",
+        "@id": "https://api.chess.com/pub/player/example_player",
+        "username": "example_player",
+        "uuid": "00000000-0000-0000-0000-0000000000a1"
+      },
+      "black": {
+        "rating": 1498,
+        "result": "resigned",
+        "@id": "https://api.chess.com/pub/player/rival_one",
+        "username": "Rival_One",
+        "uuid": "00000000-0000-0000-0000-0000000000b1"
+      },
+      "eco": "https://www.chess.com/openings/Sicilian-Defense"
+    },
+    {
+      "url": "https://www.chess.com/live/game/1000000002",
+      "pgn": "[Event \"Live Chess\"]\n[Result \"1/2-1/2\"]\n\n1. d4 d5 1/2-1/2\n",
+      "time_control": "180+2",
+      "end_time": 1789000000,
+      "rated": true,
+      "time_class": "blitz",
+      "rules": "chess",
+      "white": { "rating": 1410, "result": "agreed", "username": "rival_two" },
+      "black": { "rating": 1400, "result": "agreed", "username": "example_player" },
+      "eco": "https://www.chess.com/openings/Queens-Pawn-Opening-2...d5"
+    },
+    {
+      "url": "https://www.chess.com/game/live/1000000003",
+      "end_time": 1789500000,
+      "time_class": "rapid",
+      "white": { "rating": "1500", "result": "win", "username": "rival_three" },
+      "black": { "result": "timeout", "username": "example_player" }
+    },
+    {
+      "pgn": "[Event \"No URL\"]\n",
+      "end_time": 1789500100,
+      "time_class": "rapid",
+      "rules": "chess",
+      "white": { "rating": 1500, "result": "win", "username": "example_player" },
+      "black": { "rating": 1500, "result": "resigned", "username": "rival_four" }
+    },
+    {
+      "url": "https://www.chess.com/game/live/1000000005",
+      "time_class": "rapid",
+      "rules": "chess",
+      "white": { "rating": 1500, "result": "win", "username": "example_player" },
+      "black": { "rating": 1500, "result": "resigned", "username": "rival_four" }
+    },
+    {
+      "url": "https://www.chess.com/game/live/1000000006",
+      "end_time": 1789500200,
+      "time_class": "standard",
+      "rules": "chess",
+      "white": { "rating": 1500, "result": "win", "username": "example_player" },
+      "black": { "rating": 1500, "result": "resigned", "username": "rival_four" }
+    },
+    "not a game object",
+    {
+      "url": "https://www.chess.com/game/live/1000000001",
+      "end_time": 1790000000,
+      "time_class": "rapid",
+      "rules": "chess",
+      "white": { "rating": 1523, "result": "win", "username": "example_player" },
+      "black": { "rating": 1498, "result": "resigned", "username": "rival_one" }
+    },
+    {
+      "url": "https://www.chess.com/game/live/1000000008",
+      "end_time": 1789500300,
+      "time_class": "rapid",
+      "rules": "chess",
+      "white": { "rating": 1500, "result": "win", "username": "stranger_a" },
+      "black": { "rating": 1500, "result": "resigned", "username": "stranger_b" }
+    },
+    {
+      "url": "https://www.chess.com/game/live/1000000009",
+      "end_time": 1789500400,
+      "time_class": "rapid",
+      "rules": "chess",
+      "black": { "rating": 1500, "result": "resigned", "username": "example_player" }
+    },
+    {
+      "url": "https://www.chess.com/game/live/1000000010",
+      "end_time": 1789500500,
+      "time_class": "rapid",
+      "rules": "chess",
+      "rated": "yes",
+      "time_control": "ten minutes",
+      "white": { "rating": 1500, "result": "mystery", "username": "example_player" },
+      "black": { "rating": 1500, "result": "win", "username": "rival_five" },
+      "eco": "https://evil.example/openings/Fake-Opening"
+    },
+    {
+      "url": "https://www.chess.com/game/daily/1000000011",
+      "end_time": 1789500600,
+      "time_class": "daily",
+      "rules": "chess960",
+      "rated": false,
+      "time_control": "1/259200",
+      "white": { "rating": 1200, "result": "checkmated", "username": "example_player" },
+      "black": { "rating": 1250, "result": "win", "username": "rival_six" }
+    },
+    {
+      "url": "https://www.chess.com/game/live/1000000012",
+      "end_time": 1789500700,
+      "time_class": "rapid",
+      "rules": "chess",
+      "white": { "rating": 1500, "result": "win", "username": "bad name!" },
+      "black": { "rating": 1500, "result": "resigned", "username": "example_player" }
+    },
+    {
+      "url": "https://www.chess.com/game/live/1000000013",
+      "end_time": 1900000000,
+      "time_class": "rapid",
+      "rules": "chess",
+      "white": { "rating": 1500, "result": "win", "username": "example_player" },
+      "black": { "rating": 1500, "result": "resigned", "username": "rival_seven" }
+    }
+  ]
+}

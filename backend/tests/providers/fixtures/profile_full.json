@@ -1,0 +1,17 @@
+{
+  "@id": "https://api.chess.com/pub/player/example_player",
+  "url": "https://www.chess.com/member/Example_Player",
+  "username": "example_player",
+  "player_id": 123456,
+  "name": "Example Player",
+  "avatar": "https://images.chesscomfiles.com/uploads/v1/user/123456.example.jpeg",
+  "status": "premium",
+  "location": "Somewhere",
+  "country": "https://api.chess.com/pub/country/KZ",
+  "joined": 1500000000,
+  "last_online": 1790000000,
+  "followers": 10,
+  "is_streamer": false,
+  "verified": false,
+  "league": "Wood"
+}

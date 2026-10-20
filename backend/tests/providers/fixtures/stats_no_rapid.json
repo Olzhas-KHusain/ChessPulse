@@ -1,0 +1,6 @@
+{
+  "chess_blitz": {
+    "last": { "rating": 1400, "date": 1790000500, "rd": 50 },
+    "record": { "win": 10, "loss": 10, "draw": 1 }
+  }
+}
