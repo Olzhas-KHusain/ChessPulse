@@ -2,12 +2,14 @@
 
 Web application for analyzing a Chess.com player's Rapid games from the last rolling
 30 days. This repository currently contains the **development environment, application
-skeleton, database schema, and Chess.com provider adapter** (no ingestion service,
-analytics or business endpoints yet).
+skeleton, database schema, Chess.com provider adapter, ingestion, cache policy, and the
+player endpoints** `GET /api/v1/players/{username}/overview`, `/rating-history`,
+`/openings`, `/opponents`, `/games` and `/games/{game_id}`, and the **React dashboard**
+(search, overview, rating chart, openings, opponents, paginated games, game details).
 
 Engineering rules: `AGENT.md`. Workflow: `process.md`. Product and technical
 specification: `spec.md`. Feature specifications: `docs/specs/` (database schema,
-Chess.com provider). Architecture decisions: `docs/adr/`.
+Chess.com provider, ingestion, cache policy, overview, breakdown and games APIs, frontend dashboard). Architecture decisions: `docs/adr/`.
 
 ## Stack
 
@@ -48,12 +50,12 @@ cd backend
 python3 -m venv .venv
 source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
-alembic upgrade head         # creates the schema
+alembic upgrade head         # creates/updates the schema (revisions 0001, 0002)
 cd ..
 
-# 4. Frontend
+# 4. Frontend (first time: npm install creates package-lock.json; commit it, later use npm ci)
 cd frontend
-npm ci
+npm install
 cd ..
 ```
 
@@ -101,6 +103,8 @@ with a message that names the variable but never prints its value.
 | `UPSTREAM_TIMEOUT_SECONDS`       | no       | Per-request timeout, `10` by default (0 < value ≤ 60)          |
 | `UPSTREAM_MAX_RETRIES`           | no       | Extra attempts for transient failures, `2` by default (0–5)    |
 | `UPSTREAM_MAX_RETRY_AFTER_SECONDS` | no     | Longest Retry-After/backoff waited, `10` by default (0–120)    |
+| `CACHE_TTL_SECONDS`              | no       | Dataset freshness, `43200` (12 h) by default                   |
+| `REFRESH_FAILURE_COOLDOWN_SECONDS` | no     | Wait after a failed refresh, `300` by default                  |
 | `POSTGRES_USER/PASSWORD/DB/PORT` | compose  | Used by `docker-compose.yml`; keep in sync with `DATABASE_URL` |
 | `VITE_DEV_PROXY_TARGET`          | no       | Backend URL for the Vite dev proxy                             |
 | `VITE_API_BASE_URL`              | no       | API base URL for built bundles (empty = same origin)           |
@@ -181,6 +185,24 @@ handling and validation of every field. Verified contract, error mapping and kno
 limitations: `docs/specs/chess-com-provider.md`. Set `CHESS_COM_USER_AGENT` to a value
 with contact information, as Chess.com recommends, for example
 `ChessPulse/0.1 (contact: you@example.com)`.
+
+## Known limitations and release status
+
+- Release checklist with the checks actually executed: `docs/release/RELEASE_CHECKLIST.md`.
+- Known limitations and deferred (non-MVP) features: `docs/KNOWN_LIMITATIONS.md`.
+- Data freshness: player data is cached for 12 hours; every API response states
+  `data_status` (`fresh`, `partial`, `stale`) and `last_successful_update`.
+- Engine-based metrics (accuracy, blunders, estimated Elo) are **not** part of the MVP.
+
+## Deployment assumptions
+
+- One FastAPI process (or several) behind a reverse proxy, PostgreSQL 16, the built
+  frontend served as static files from the same origin (`VITE_API_BASE_URL` empty) or
+  from an origin listed in `CORS_ORIGINS`.
+- Outbound HTTPS to `api.chess.com` is required; set `CHESS_COM_USER_AGENT` with contact
+  information. Run `alembic upgrade head` before starting a new version.
+- Docker Compose in this repository is for local PostgreSQL only; a production
+  deployment target has not been chosen (spec §20).
 
 ## Troubleshooting
 

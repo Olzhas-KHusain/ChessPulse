@@ -60,6 +60,14 @@ class Settings(BaseSettings):
     # Longest Retry-After / backoff delay we are willing to wait inside one request.
     upstream_max_retry_after_seconds: float = Field(default=10.0, ge=0, le=120)
 
+    # --- Cache policy -----------------------------------------------------------
+    # How long a successfully refreshed player dataset is served without contacting
+    # the provider. Chess.com documents that PubAPI data refreshes at most every 12 h.
+    cache_ttl_seconds: int = Field(default=12 * 3600, ge=60, le=7 * 24 * 3600)
+    # Minimum wait after a failed refresh before the next attempt (Retry-After wins
+    # when longer), so outages and rate limits are not hammered.
+    refresh_failure_cooldown_seconds: int = Field(default=300, ge=0, le=24 * 3600)
+
     @field_validator("database_url")
     @classmethod
     def _validate_database_url(cls, value: SecretStr) -> SecretStr:
