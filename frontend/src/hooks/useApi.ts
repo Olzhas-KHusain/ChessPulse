@@ -3,9 +3,7 @@ import { useEffect, useState } from 'react';
 import { ApiError } from '../services/chesspulseApi';
 
 export type ApiState<T> =
-  | { status: 'loading' }
-  | { status: 'error'; error: ApiError }
-  | { status: 'success'; data: T };
+  { status: 'loading' } | { status: 'error'; error: ApiError } | { status: 'success'; data: T };
 
 /**
  * Runs `load` whenever `key` changes, cancelling the previous request (AbortController)

@@ -4,7 +4,6 @@ import { DataStatusBanner, Section } from '../../components/StateViews';
 import { useApi } from '../../hooks/useApi';
 import type { ChesspulseApi } from '../../services/chesspulseApi';
 import type { GroupSort } from '../../types/api';
-import { GameDetailPanel } from '../games/GameDetailPanel';
 import { GamesPanel } from '../games/GamesPanel';
 import { OpeningsTable, OpponentsTable, SortSelect } from '../openings/GroupTables';
 import { OverviewPanel } from '../overview/OverviewPanel';
@@ -58,7 +57,6 @@ function Tabs({
   overview: ReactNode;
 }) {
   const [active, setActive] = useState<TabId>('overview');
-  const [openGame, setOpenGame] = useState<string | null>(null);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -116,17 +114,7 @@ function Tabs({
         {active === 'rating' && <RatingTab api={api} username={username} />}
         {active === 'openings' && <OpeningsTab api={api} username={username} />}
         {active === 'opponents' && <OpponentsTab api={api} username={username} />}
-        {active === 'games' &&
-          (openGame ? (
-            <GameDetailPanel
-              api={api}
-              username={username}
-              gameId={openGame}
-              onBack={() => setOpenGame(null)}
-            />
-          ) : (
-            <GamesPanel api={api} username={username} onOpenGame={setOpenGame} />
-          ))}
+        {active === 'games' && <GamesPanel api={api} username={username} />}
       </div>
     </div>
   );

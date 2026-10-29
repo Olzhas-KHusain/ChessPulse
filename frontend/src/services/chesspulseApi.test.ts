@@ -5,8 +5,9 @@ import { ApiError, chesspulseApi } from './chesspulseApi';
 afterEach(() => vi.unstubAllGlobals());
 
 function stubFetch(response: Response | Error) {
+  // Return a fresh clone per call: a Response body can be read only once.
   const fetchMock = vi.fn(() =>
-    response instanceof Error ? Promise.reject(response) : Promise.resolve(response),
+    response instanceof Error ? Promise.reject(response) : Promise.resolve(response.clone()),
   );
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;

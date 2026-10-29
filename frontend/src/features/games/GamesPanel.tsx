@@ -5,21 +5,17 @@ import { useApi } from '../../hooks/useApi';
 import type { ChesspulseApi } from '../../services/chesspulseApi';
 import type { GameSummary, PlayerOutcome } from '../../types/api';
 import { formatDateTime, formatNumber, MISSING, OUTCOME_LABEL } from '../../utils/format';
+import { GameDetailPanel } from './GameDetailPanel';
 
 const PAGE_SIZE = 20;
 
-export function GamesPanel({
-  api,
-  username,
-  onOpenGame,
-}: {
-  api: ChesspulseApi;
-  username: string;
-  onOpenGame: (gameId: string) => void;
-}) {
+export function GamesPanel({ api, username }: { api: ChesspulseApi; username: string }) {
   const [result, setResult] = useState<PlayerOutcome | null>(null);
   // cursors[i] is the cursor that loads page i (page 0 has none).
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
+  // Kept here (not in the parent) so that returning from the details view
+  // preserves the current page and result filter.
+  const [openGame, setOpenGame] = useState<string | null>(null);
   const page = cursors.length - 1;
   const cursor = cursors[page] ?? null;
   const filterId = useId();
@@ -31,6 +27,17 @@ export function GamesPanel({
   function changeFilter(value: string) {
     setResult(value === '' ? null : (value as PlayerOutcome));
     setCursors([null]);
+  }
+
+  if (openGame !== null) {
+    return (
+      <GameDetailPanel
+        api={api}
+        username={username}
+        gameId={openGame}
+        onBack={() => setOpenGame(null)}
+      />
+    );
   }
 
   return (
@@ -64,7 +71,7 @@ export function GamesPanel({
             ) : (
               <ul className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-white">
                 {data.items.map((g) => (
-                  <GameRow key={g.game_id} game={g} onOpen={() => onOpenGame(g.game_id)} />
+                  <GameRow key={g.game_id} game={g} onOpen={() => setOpenGame(g.game_id)} />
                 ))}
               </ul>
             )}

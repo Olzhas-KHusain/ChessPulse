@@ -5,7 +5,7 @@ import { ApiError } from '../services/chesspulseApi';
 import type { DatasetMeta } from '../types/api';
 import { formatDateTime } from '../utils/format';
 
-export function errorMessage(error: ApiError): string {
+function errorMessage(error: ApiError): string {
   switch (error.code) {
     case 'PLAYER_NOT_FOUND':
       return 'No Chess.com player with this username was found.';
