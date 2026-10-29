@@ -13,26 +13,27 @@ PostgreSQL 16.9 in Docker Compose on port **55432**, Docker 29.9.1.
 
 | Check | Command | Result |
 | ----- | ------- | ------ |
-| Backend lint | `ruff check app tests migrations` | ✅ pass (99 files) |
-| Backend format | `ruff format --check .` | ✅ 99 files already formatted |
-| Backend types | `mypy` (strict) | ✅ pass (98 source files) |
-| Full backend suite, with PostgreSQL | `pytest` | ✅ **399 passed** |
+| Backend lint | `ruff check app tests migrations` | ✅ pass (105 files) |
+| Backend format | `ruff format --check .` | ✅ 105 files already formatted |
+| Backend types | `mypy` (strict) | ✅ pass (104 source files) |
+| Full backend suite, with PostgreSQL | `pytest` | ✅ **409 passed** |
 | Backend suite without PostgreSQL | `pytest` | ✅ unit tests pass; DB tests skip cleanly |
 | Migrations on the development database | `alembic current` | ✅ `0003 (head)` |
 | Model/migration drift | `alembic check` | ✅ no changes detected |
-| Frontend unit/component tests | `npm run test` (Vitest 4.1.12) | ✅ **22 passed** (2 files) |
+| Frontend unit/component tests | `npm run test` (Vitest 4.1.12) | ✅ **23 passed** (2 files) |
 | Frontend lint | `npm run lint` | ✅ 0 errors, 0 warnings |
 | Frontend format | `npm run format:check` | ✅ all files match Prettier |
 | Frontend types | `npm run typecheck` | ✅ clean (`tsconfig` + `tsconfig.node`) |
-| Frontend production build | `npm run build` | ✅ built in ~11 s; one 634.07 kB chunk (189.53 kB gzip) → Vite chunk-size warning only |
+| Frontend production build | `npm run build` | ✅ built in ~13 s; one 657.65 kB chunk (194.64 kB gzip) → Vite chunk-size warning only |
 | Frontend dependency audit | `npm audit` | ✅ **0 vulnerabilities** (after the Vitest 4.1.12 upgrade) |
 | Docker database | `docker compose up -d db` | ✅ `postgres:16.9-alpine`, healthy, `127.0.0.1:55432` |
 | Live Chess.com contract | real requests for `olzhaswlk` | ✅ profile, stats, archives, 2026/09 and 2026/10 archives all `200` |
 | Live end-to-end UI | browser at `http://localhost:5173` | ✅ search → overview → all tabs → pagination → filter → game details → back |
 
 Backend suite history: the 2026-10-20 sandbox run recorded 356 passed; the suite grew to
-361 (restored Issue 1 files), to 368 after the opening-name normalization tests, and to
-399 after engine analysis (accuracy math, per-game analysis, API + worker integration).
+361 (restored Issue 1 files), to 368 after the opening-name normalization tests, to
+399 after engine analysis (accuracy math, per-game analysis, API + worker integration),
+and to 409 after the cross-game form report.
 
 ## 2. Live data verification (2026-10-29)
 
@@ -73,6 +74,25 @@ enqueues; `python -m app.worker --once` performs the search.
 | Browser check of the panel | ✅ cached result rendered (86.2% / 85.0%), key moments listed, no console errors |
 | Cache behaviour | ✅ second `POST` returns the stored analysis without a new job |
 
+## 3b. Cross-game form report verification (2026-10-29)
+
+`POST /form/analyze` queued **42** remaining games (`games_total: 43`),
+`python -m app.worker --drain` completed all of them (≈ 5–10 s per game), and
+`GET /form` then returned full coverage.
+
+| Check | Result |
+| ----- | ------ |
+| Backend tests (form analytics + API) | ✅ 9 pure + 1 integration test; full suite **409 passed** |
+| Frontend tests (form tab) | ✅ **23 passed** (2 files), lint/format/typecheck clean |
+| Empty report (1 analysed game) | ✅ `primary_leak: null`, phase groups labelled, no Elo wording |
+| Batch request | ✅ `{games_total: 43, already_analyzed: 1, queued: 42, pending: 42}` |
+| Worker drain | ✅ 42 jobs completed, 0 failed, queue empty |
+| Full report | ✅ 43/43 analysed; accuracy 87.4%, ACPL 94.67, 163.4 wp points / game |
+| Primary leak on the live account | ✅ `As White` — 177.5 points/game over 22 games (123 blunders) |
+| Top openings | ✅ four openings at ≥ 2 games, ranked by loss/game (Modern Defense 237.7) |
+| Browser check | ✅ headline, trend chart, phase/colour/opening tables, top moments with game links; no console errors |
+| Sample-size honesty | ✅ openings with 2 games never named primary leak; report states "43 of 43 eligible games analysed" |
+
 Definitions live in `spec.md` §6.10 and `AGENT.md`: accuracy is the mean per-move
 retention of the engine's win probability (documented Lichess formula), and **no rating
 is estimated from it**. The UI says "mean move accuracy" and states that labels use fixed
@@ -108,7 +128,7 @@ analytics.
 | 8 | Browse games and details | ✅ | `App.test.tsx` + live walkthrough (PGN, pagination, filter) |
 | 9 | Unknown/empty/stale/partial/unavailable distinguishable | ✅ | cache + API tests + UI state tests |
 | 10 | Provider failures keep last-known-good data | ✅ | `test_cache.py`, E2E |
-| 11 | Automated tests for analytics and failures | ✅ | 399 backend + 22 frontend tests |
+| 11 | Automated tests for analytics and failures | ✅ | 409 backend + 23 frontend tests |
 | 12 | Local start with documented instructions | ✅ | README; Compose, both dev servers and the analysis worker executed |
 | 13 | Provider checked against official docs and terms | ✅ | `chess-com-provider.md`; live requests on 2026-10-29 |
 | 14 | No unverified engine metric presented | ✅ | Provider `accuracies` still ignored; the only engine numbers are produced by Stockfish with documented definitions (§3) and are labelled as such |
@@ -134,7 +154,7 @@ analytics.
 4. Choose a deployment target and serve the built frontend from the same origin
    (`VITE_API_BASE_URL` empty) or an origin listed in `CORS_ORIGINS`.
 5. Consider code-splitting the frontend bundle (Recharts accounts for most of the
-   634.07 kB single chunk).
+   657.65 kB single chunk).
 6. Install Stockfish on the deployment host (or set `STOCKFISH_PATH`), run at least one
    `python -m app.worker` process, and monitor the queue; without a worker, analyses stay
    `queued` forever.

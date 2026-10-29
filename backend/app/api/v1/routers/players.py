@@ -16,10 +16,12 @@ from app.models import PlayerResult
 from app.providers.base import GameDataProvider
 from app.schemas.analysis import AnalysisStateResponse
 from app.schemas.breakdowns import OpeningsResponse, OpponentsResponse, RatingHistoryResponse
+from app.schemas.form import AnalyzeScopeResponse, FormReportResponse
 from app.schemas.games import GameDetailResponse, GameListResponse
 from app.schemas.overview import ErrorResponse, OverviewResponse
 from app.services.analysis import AnalysisService
 from app.services.breakdowns import MAX_LIMIT, BreakdownService
+from app.services.form import FormService
 from app.services.games import DEFAULT_GAMES_LIMIT, MAX_GAMES_LIMIT, GamesService
 from app.services.overview import OverviewService
 
@@ -195,3 +197,39 @@ def request_game_analysis(
     now: Annotated[datetime, Depends(get_now)],
 ) -> AnalysisStateResponse:
     return _analysis_service(session, provider, settings).request(username, game_id, now)
+
+
+def _form_service(session: Session, provider: GameDataProvider, settings: Settings) -> FormService:
+    return FormService(session, PlayerDatasetCache(session, provider, settings), settings)
+
+
+@router.get(
+    "/{username}/form",
+    response_model=FormReportResponse,
+    responses=_ERRORS,
+    summary="Cross-game form report: accuracy trend and where win probability leaks",
+)
+def get_form(
+    username: Username,
+    session: Annotated[Session, Depends(get_session)],
+    provider: Annotated[GameDataProvider, Depends(get_provider)],
+    settings: Annotated[Settings, Depends(get_settings_dep)],
+    now: Annotated[datetime, Depends(get_now)],
+) -> FormReportResponse:
+    return _form_service(session, provider, settings).get_form(username, now)
+
+
+@router.post(
+    "/{username}/form/analyze",
+    response_model=AnalyzeScopeResponse,
+    responses=_ERRORS,
+    summary="Queue engine analysis for every game in the current scope that lacks one",
+)
+def analyze_form(
+    username: Username,
+    session: Annotated[Session, Depends(get_session)],
+    provider: Annotated[GameDataProvider, Depends(get_provider)],
+    settings: Annotated[Settings, Depends(get_settings_dep)],
+    now: Annotated[datetime, Depends(get_now)],
+) -> AnalyzeScopeResponse:
+    return _form_service(session, provider, settings).analyze_scope(username, now)

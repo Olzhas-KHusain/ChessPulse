@@ -3,7 +3,9 @@
  */
 import type {
   AnalysisState,
+  AnalyzeScope,
   ApiErrorBody,
+  FormReport,
   GameDetail,
   GameList,
   GroupSort,
@@ -134,6 +136,10 @@ export const chesspulseApi = {
       signal,
       'POST',
     ),
+  form: (username: string, signal?: AbortSignal) =>
+    getJson<FormReport>(`${player(username)}/form`, {}, signal),
+  analyzeForm: (username: string, signal?: AbortSignal) =>
+    getJson<AnalyzeScope>(`${player(username)}/form/analyze`, {}, signal, 'POST'),
 };
 
 export type ChesspulseApi = typeof chesspulseApi;

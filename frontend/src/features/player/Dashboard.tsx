@@ -7,12 +7,14 @@ import type { ChesspulseApi } from '../../services/chesspulseApi';
 import type { GroupSort, Overview } from '../../types/api';
 import { formatDate, formatNumber } from '../../utils/format';
 import { GamesPanel } from '../games/GamesPanel';
+import { FormPanel } from '../form/FormPanel';
 import { OpeningsTable, OpponentsTable, SortSelect } from '../openings/GroupTables';
 import { OverviewPanel } from '../overview/OverviewPanel';
 import { RatingHistoryPanel } from '../rating-history/RatingHistoryPanel';
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
+  { id: 'form', label: 'Form report' },
   { id: 'rating', label: 'Rating history' },
   { id: 'openings', label: 'Openings' },
   { id: 'opponents', label: 'Opponents' },
@@ -154,6 +156,7 @@ function Tabs({
         className="pt-5"
       >
         {active === 'overview' && overview}
+        {active === 'form' && <FormPanel api={api} username={username} />}
         {active === 'rating' && <RatingTab api={api} username={username} />}
         {active === 'openings' && <OpeningsTab api={api} username={username} />}
         {active === 'opponents' && <OpponentsTab api={api} username={username} />}

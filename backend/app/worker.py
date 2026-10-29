@@ -39,6 +39,9 @@ def resolve_engine_path(settings: Settings) -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m app.worker")
     parser.add_argument("--once", action="store_true", help="process at most one job")
+    parser.add_argument(
+        "--drain", action="store_true", help="process jobs until the queue is empty, then exit"
+    )
     parser.add_argument("--depth", type=int, help="override the configured search depth")
     parser.add_argument(
         "--poll", type=float, help="seconds between empty-queue polls (default: configured)"
@@ -90,6 +93,8 @@ def main(argv: list[str] | None = None) -> int:
                 max_attempts=settings.analysis_job_max_attempts,
             )
             if args.once:
+                return 0
+            if args.drain and not worked:
                 return 0
             if not worked:
                 time.sleep(poll_seconds)

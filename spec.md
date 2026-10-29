@@ -228,6 +228,28 @@ Documented definitions:
 
 Engine scores are never presented as exact, and no rating is derived from them.
 
+### 6.11 Cross-game form report (implemented)
+
+The report answers "why isn't the rating moving" by aggregating every stored engine
+analysis in the current scope (Rapid, rolling 30 days — broader scopes are deferred).
+Definitions:
+
+- **Win probability lost per game** (the headline metric): the sum of the mover's
+  win-probability drops over their own moves, divided by the number of analysed games.
+  It is a relative leak indicator in percentage points and may exceed 100 in long,
+  swingy games. It is **not** an Elo estimate and never converts into one.
+- **Phases are defined by move number** and the label says so: opening 1–10, middlegame
+  11–30, late 31+. There is no material-based endgame detection.
+- **Primary leak**: the phase, colour or opening with the highest loss per game, **only**
+  when the group has at least three analysed games; openings need two games to appear in
+  the table, ties rank openings before phases before colours, and one bad game can never
+  define the report.
+- **Most expensive moments**: up to ten of the player's own inaccuracies, mistakes and
+  blunders ranked by win-probability loss, each linked to its game.
+
+Partial coverage is stated, never hidden: the UI shows how many of the eligible games
+have been analysed and polls while jobs are queued or running.
+
 ## 7. System Architecture
 
 ### 7.1 Architecture style

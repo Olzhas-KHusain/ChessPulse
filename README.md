@@ -4,12 +4,14 @@ Web application for analyzing a Chess.com player's Rapid games from the last rol
 30 days. This repository currently contains the **development environment, application
 skeleton, database schema, Chess.com provider adapter, ingestion, cache policy, and the
 player endpoints** `GET /api/v1/players/{username}/overview`, `/rating-history`,
-`/openings`, `/opponents`, `/games` and `/games/{game_id}`, and the **React dashboard**
-(search, overview, rating chart, openings, opponents, paginated games, game details).
+`/openings`, `/opponents`, `/games`, `/games/{game_id}` and `/form`, plus the **React
+dashboard** (search, overview, cross-game form report, rating chart, openings, opponents,
+paginated games, game details with opt-in Stockfish analysis).
 
 Engineering rules: `AGENT.md`. Workflow: `process.md`. Product and technical
 specification: `spec.md`. Feature specifications: `docs/specs/` (database schema,
-Chess.com provider, ingestion, cache policy, overview, breakdown and games APIs, frontend dashboard). Architecture decisions: `docs/adr/`.
+Chess.com provider, ingestion, cache policy, overview, breakdown, games, engine analysis
+and form report APIs, frontend dashboard). Architecture decisions: `docs/adr/`.
 
 ## Stack
 
@@ -99,6 +101,7 @@ cd backend
 source .venv/bin/activate
 python -m app.worker                        # loop forever
 python -m app.worker --once                 # process at most one job
+python -m app.worker --drain                # process the queue, then exit
 ```
 
 The worker claims jobs with `FOR UPDATE SKIP LOCKED`, so several workers can run in
@@ -111,6 +114,10 @@ Endpoints:
   returns the cached result when it already exists).
 - `GET  /api/v1/players/{username}/games/{game_id}/analysis` — current state
   (`missing`, `queued`, `running`, `completed`, `failed`) and the payload when done.
+- `POST /api/v1/players/{username}/form/analyze` — queue every game in the current
+  scope that has no stored analysis.
+- `GET  /api/v1/players/{username}/form` — cross-game report: accuracy trend, win
+  probability lost per game, leaks by phase/colour/opening and the most expensive moves.
 
 ### Windows notes (Git Bash + Docker Desktop)
 

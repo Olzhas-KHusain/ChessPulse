@@ -52,18 +52,34 @@
   one. Only the provider's reported ratings and the player's current rating are shown.
 - **Labels are threshold-based.** `best` / `good` / `inaccuracy` / `mistake` / `blunder`
   use fixed centipawn-loss cut-offs; they are not a judgment of intent.
-- **Per-game only.** There is no cross-game aggregate of accuracy, blunders or leaks yet.
 - **One worker process** is enough for local use; more workers can run safely, but there
   is no scheduler, priority or per-user quota.
 - **Payload size.** A full game stores one JSONB document (roughly 10–40 kB); aggregate
   queries over many games will need a summary table rather than JSONB scans.
 - **PGN is required.** Games without a PGN cannot be analysed and fail with `missing_pgn`.
 
+## Cross-game form report
+
+- **Aggregates are computed per request** from stored JSONB payloads. At 43 Rapid games
+  this is fast; at thousands of games the query and aggregation will need a summary table.
+- **Win probability lost per game is a sum over moves**, so it can exceed 100 points in a
+  long game with several swings. It is a relative leak indicator, not a percentage of one
+  game.
+- **Phases use move numbers, not material.** "Late game" (31+) is not a true endgame
+  detector; a game that trades everything on move 15 still counts its moves as middlegame.
+- **Small samples.** A group becomes the primary leak only with at least three analysed
+  games; openings need two games to appear in the table. With few games the report says
+  so instead of naming a leak.
+- **Unknown openings** are grouped as "Unknown opening" and are excluded from the
+  primary-leak candidates unless they reach the sample threshold.
+- **Rapid only, 30 days only.** The service is parameterised by `time_class`, but the
+  router still fixes Rapid and the rolling window; scaling is the next step.
+
 ## Explicitly deferred (not in the MVP)
 
-- Cross-game engine aggregates (accuracy trend, leak attribution, practice queue).
+- Practice queue derived from the report's top moments.
 - "Brilliant" or other narrative labels without a written, verifiable definition.
-- `player_statistics` aggregate table (not needed; aggregates are computed per request).
+- `player_statistics` aggregate table (not needed yet; aggregates are computed per request).
 - Blitz, Bullet, Daily and variant analytics; windows other than 30 days.
 - Accounts, authentication, private Chess.com data.
 - Deployment target, containers for backend/frontend, production monitoring.

@@ -190,3 +190,88 @@ export interface AnalysisState {
   completed_at: string | null;
   analysis: GameAnalysisPayload | null;
 }
+
+export type FormPhase = 'opening' | 'middlegame' | 'late';
+export type FormLeakKind = 'phase' | 'color' | 'opening';
+
+export interface FormAccuracyPoint {
+  game_id: string;
+  played_at: string;
+  color: 'white' | 'black';
+  result: PlayerOutcome;
+  opponent: string;
+  accuracy: number | null;
+  acpl: number | null;
+  blunders: number;
+  mistakes: number;
+}
+
+export interface FormGroup {
+  key: string;
+  label: string;
+  games: number;
+  moves: number;
+  blunders: number;
+  mistakes: number;
+  inaccuracies: number;
+  acpl: number | null;
+  accuracy: number | null;
+  /** Win-probability points given up per analysed game in this slice. */
+  wp_loss_per_game: number;
+}
+
+export interface FormMoment {
+  game_id: string;
+  played_at: string;
+  color: 'white' | 'black';
+  opponent: string;
+  move_number: number;
+  san: string;
+  classification: MoveClassification;
+  cp_loss: number;
+  wp_loss: number;
+  phase: FormPhase;
+  opening_name: string | null;
+  game_url: string | null;
+}
+
+export interface FormLeak {
+  kind: FormLeakKind;
+  label: string;
+  wp_loss_per_game: number;
+  games: number;
+  moves: number;
+  blunders: number;
+  mistakes: number;
+}
+
+export interface FormReport extends DatasetMeta {
+  username: string;
+  period: Period;
+  time_class: string;
+  games_total: number;
+  games_analyzed: number;
+  games_queued: number;
+  games_running: number;
+  games_failed: number;
+  accuracy_mean: number | null;
+  opponent_accuracy_mean: number | null;
+  acpl_mean: number | null;
+  /** Win-probability points given up per analysed game, own moves only. */
+  wp_loss_per_game: number | null;
+  accuracy_trend: FormAccuracyPoint[];
+  by_phase: FormGroup[];
+  by_color: FormGroup[];
+  by_opening: FormGroup[];
+  top_moments: FormMoment[];
+  primary_leak: FormLeak | null;
+}
+
+export interface AnalyzeScope {
+  username: string;
+  time_class: string;
+  games_total: number;
+  already_analyzed: number;
+  queued: number;
+  pending: number;
+}

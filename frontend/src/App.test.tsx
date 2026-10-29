@@ -28,6 +28,8 @@ function fakeApi(overrides: Partial<ChesspulseApi> = {}): ChesspulseApi {
     game: vi.fn().mockResolvedValue(fx.gameDetail(1, 'available')),
     analysis: vi.fn().mockResolvedValue(fx.missingAnalysis),
     requestAnalysis: vi.fn().mockResolvedValue(fx.missingAnalysis),
+    form: vi.fn().mockResolvedValue(fx.formReport),
+    analyzeForm: vi.fn().mockResolvedValue(fx.analyzeScope),
     ...overrides,
   };
 }
@@ -185,14 +187,30 @@ describe('sections', () => {
     expect(metric('Games').textContent).toBe('42');
   });
 
+  it('shows the cross-game form report with the primary leak and coverage', async () => {
+    const analyzeForm = vi.fn().mockResolvedValue(fx.analyzeScope);
+    render(<App api={fakeApi({ analyzeForm })} />);
+    search('example_player');
+    await openTab('Form report');
+
+    expect(await screen.findByRole('heading', { name: 'Form report' })).toBeTruthy();
+    expect(screen.getAllByText('Caro-Kann Defense').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('26.4').length).toBeGreaterThan(0);
+    expect(screen.getByText(/4 of 5 eligible games analysed/)).toBeTruthy();
+    expect(screen.getByText('Qh5')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Analyze 1 remaining' }));
+    await waitFor(() => expect(analyzeForm).toHaveBeenCalledWith('example_player'));
+  });
+
   it('supports keyboard navigation between tabs', async () => {
     render(<App api={fakeApi()} />);
     search('example_player');
     const overviewTab = await screen.findByRole('tab', { name: 'Overview' });
     fireEvent.keyDown(overviewTab, { key: 'ArrowRight' });
-    const ratingTab = screen.getByRole('tab', { name: 'Rating history' });
-    expect(ratingTab.getAttribute('aria-selected')).toBe('true');
-    expect(document.activeElement).toBe(ratingTab);
+    const formTab = screen.getByRole('tab', { name: 'Form report' });
+    expect(formTab.getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(formTab);
   });
 });
 
