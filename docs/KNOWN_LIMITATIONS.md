@@ -13,8 +13,11 @@
   variants, and games without a `rules` value, are excluded.
 - **Unknown results** are kept as `unknown`, excluded from the win rate, and they break
   streaks (`streak_may_be_incomplete`).
-- **Openings** are identified by Chess.com's opening page slug; names are derived from it
-  (e.g. "Caro Kann" without the hyphen). No external opening database is used.
+- **Openings** are identified by Chess.com's opening page slug. The display name is the
+  slug with a documented orthography table that restores apostrophes and hyphens
+  ("King's Pawn", "Caro-Kann", "Smith-Morra"); a name whose slug is not in the table is
+  shown with spaces where the standard spelling may need a hyphen. No external opening
+  database is used, and the provider's `Undefined` placeholder is treated as unknown.
 - **Renames.** Detected via `player_id` when the profile is fetched. Renaming into a
   username already stored for another account (e.g. an opponent row) fails the refresh
   (HTTP 500); expected to be extremely rare.

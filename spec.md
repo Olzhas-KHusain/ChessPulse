@@ -339,6 +339,10 @@ All routes use `/api/v1`.
 
 ### 9.1 `GET /api/v1/players/{username}`
 
+> **MVP note.** This endpoint is not exposed. The overview response already returns the
+> resolved username, the profile link, the current rating and the freshness metadata that
+> the dashboard needs (see `AGENT.md` §7).
+
 Purpose: resolve and return basic public player information.
 
 Example response:
@@ -582,7 +586,27 @@ Constraints and indexes:
 
 Do not make a provider game identifier unique until its uniqueness guarantees have been verified.
 
-### 11.3 `player_games`
+### 11.3 `openings`
+
+Purpose: normalize opening identifiers and names.
+
+Fields:
+- `id`: primary key
+- `source`: nullable string
+- `source_opening_id`: nullable string
+- `name`: canonical display name
+- `eco_code`: nullable string
+- `created_at`
+- `updated_at`
+
+Constraints:
+- A uniqueness rule for source identifiers when present.
+- An index on `eco_code` when it is used for lookup.
+
+If opening metadata is missing or unreliable, use a nullable relationship or an explicit
+unknown grouping in the analytics layer. Do not invent an ECO code.
+
+### 11.4 `player_games`
 
 Purpose: represent a player's participation in a game and store perspective-specific information.
 
@@ -604,7 +628,7 @@ Constraints:
 
 This table simplifies player-relative statistics and avoids duplicating separate white/black queries in analytics code.
 
-### 11.4 `player_statistics`
+### 11.5 `player_statistics`
 
 Purpose: cache computed aggregates for a player and a defined analysis window.
 
@@ -623,7 +647,7 @@ Constraints:
 
 Do not persist aggregate results without enough information to invalidate or recompute them when the source data or metric rules change.
 
-### 11.5 `cache_metadata`
+### 11.6 `cache_metadata`
 
 Purpose: track fetch status and freshness for provider resources.
 
@@ -648,7 +672,7 @@ Constraints:
 
 Cache metadata is not a substitute for validating whether the cached data itself is usable.
 
-### 11.6 Future-only `game_analysis`
+### 11.7 Future-only `game_analysis`
 
 Not part of the MVP.
 
@@ -834,6 +858,9 @@ Validate configuration at startup and fail clearly when required settings are mi
 
 ## 18. MVP Release Checklist
 
+Status of each item, with the command that produced the evidence, is tracked in
+`docs/release/RELEASE_CHECKLIST.md`.
+
 - [ ] Backend starts with documented configuration.
 - [ ] Database migrations run from a clean database.
 - [ ] A visitor can search by Chess.com username.
@@ -862,121 +889,8 @@ Resolve these during the provider-integration issue:
 - Does provider data support a sufficiently complete rating-history chart, or should the UI explicitly present a sparse series?
 
 Document verified answers in the repository before depending on them.
-- Index on `time_class`.
-- Indexes supporting queries by player and date through the player-game relationship.
-- Do not store duplicate provider games when archive retrieval overlaps.
 
-A game may be retained for data normalization only if permitted by provider terms. The analytics query must still enforce the 30-day Rapid scope.
-
-### 11.3 `player_games`
-
-Purpose: connect a game to the player whose perspective is used in analytics.
-
-Fields:
-- `id`: primary key
-- `player_id`: FK to `players`
-- `game_id`: FK to `games`
-- `player_color`: `white` or `black`
-- `player_result`: `win`, `loss`, `draw`, or `unknown`
-- `rating_before`: nullable integer
-- `rating_after`: nullable integer, only when actually available
-- `created_at`
-- `updated_at`
-
-Constraints:
-- Unique `player_id` plus `game_id`.
-- Index on `player_id`.
-- Index or composite index supporting date-filtered game retrieval.
-
-Do not derive `rating_after` from an assumed formula. Store it only when the source actually provides a trustworthy value.
-
-### 11.4 `openings`
-
-Purpose: normalize opening identifiers and names.
-
-Fields:
-- `id`: primary key
-- `source`: nullable string
-- `source_opening_id`: nullable string
-- `name`: canonical display name
-- `eco_code`: nullable string
-- `created_at`
-- `updated_at`
-
-Constraints:
-- A uniqueness rule for source identifiers when present.
-- An index on `eco_code` when it is used for lookup.
-
-If opening metadata is missing or unreliable, use a nullable relationship or an explicit unknown grouping in the analytics layer. Do not invent an ECO code.
-
-### 11.5 `player_statistics`
-
-Purpose: optionally persist computed summaries.
-
-Fields:
-- `id`: primary key
-- `player_id`: FK to `players`
-- `period_start`
-- `period_end`
-- `metric_version`
-- `games_count`
-- `wins`
-- `losses`
-- `draws`
-- `win_rate`: nullable numeric
-- `current_streak_type`: nullable string
-- `current_streak_length`: nullable integer
-- `longest_winning_streak`: nullable integer
-- `computed_at`
-- `data_status`
-
-Constraints:
-- Unique player, period boundaries, and metric version if this table stores one canonical summary per window.
-- Index on player and period end.
-
-Persisting summaries is optional for the first implementation. If added, define invalidation and recomputation rules before relying on them. A moving 30-day window changes even when the underlying games do not.
-
-### 11.6 `cache_metadata`
-
-Purpose: track source freshness and last-known-good data.
-
-Fields:
-- `id`: primary key
-- `player_id`: nullable FK to `players`
-- `resource_type`: e.g. `profile`, `games`, `overview`
-- `cache_key`: normalized resource identifier
-- `fetched_at`: nullable timestamp of last successful fetch
-- `expires_at`: nullable timestamp
-- `last_attempt_at`: nullable timestamp
-- `last_error_code`: nullable string
-- `last_error_at`: nullable timestamp
-- `status`: `fresh`, `stale`, `refreshing`, or `unavailable`
-- `created_at`
-- `updated_at`
-
-Constraints:
-- Unique `cache_key`.
-- Index on `expires_at` for maintenance queries where appropriate.
-
-This table stores cache metadata, not necessarily the cached payload itself. Actual game/profile data is stored in the domain tables. If raw provider payloads are retained, their schema, size limits, privacy implications, and storage permissions must be reviewed first.
-
-### 11.7 Future `game_analysis` table
-
-Not part of the MVP.
-
-A future engine-analysis stage may require:
-- Game reference
-- Engine and version
-- Analysis settings
-- Completion status
-- Per-move analysis
-- Accuracy calculation version
-- Analysis timestamp
-- Failure reason
-
-Do not create this table until engine analysis is approved and its data model is specified.
-
-## 12. Data Ingestion and Normalization
+## 20. Data Ingestion and Normalization
 
 Recommended ingestion workflow:
 
@@ -986,322 +900,27 @@ Recommended ingestion workflow:
 4. Refresh expired data within configured request and rate limits.
 5. Retrieve eligible game archives or records through documented interfaces.
 6. Validate each record independently.
-7. Normalize game identifiers, timestamps, time controls, players, ratings, results, and available opening data.
+7. Normalize game identifiers, timestamps, time controls, players, ratings, results, and
+   available opening data.
 8. Upsert records using stable provider identifiers.
 9. Associate games with the requested player.
 10. Calculate analytics from validated eligible records.
 11. Return data and explicit freshness/completeness metadata.
 
-### Idempotency
+### 20.1 Idempotency
 
-Repeated retrieval of the same provider game must not create duplicate database rows or duplicate counts.
+Repeated retrieval of the same provider game must not create duplicate database rows or
+duplicate counts.
 
-### Transaction behavior
+### 20.2 Transaction behavior
 
-Persist each coherent batch transactionally. If a single game is malformed, log a safe diagnostic and continue processing other valid games where possible.
+Persist each coherent batch transactionally. If a single game is malformed, log a safe
+diagnostic and continue processing other valid games where possible.
 
-Do not leave partially written associations that produce duplicate or contradictory results.
+Do not leave partially written associations that produce duplicate or contradictory
+results.
 
-### Data retention
+### 20.3 Data retention
 
-Store only data needed for the product and permitted by provider terms. Define a retention and cleanup policy before introducing large-scale historical ingestion.
-
-## 13. Cache and Refresh Strategy
-
-Initial configurable default: 12 hours for reusable provider data, subject to current provider guidance and observed requirements.
-
-This is a project default proposal, not a claim about Chess.com's required or recommended cache duration.
-
-Requirements:
-- Respect provider cache directives and rate limits.
-- Do not refresh on every dashboard component request independently.
-- Reuse normalized data across overview, opening, opponent, and game endpoints.
-- Avoid duplicate concurrent refreshes for the same resource where practical.
-- Use bounded timeouts and retries.
-- Respect `Retry-After` when supplied.
-- Preserve last-known-good data after refresh failure.
-- Expose the last successful update time.
-- Distinguish a confirmed empty result from a failed request.
-- Do not cache invalid or unvalidated upstream payloads as successful results.
-
-### Suggested refresh behavior
-
-| Cache state | Behavior |
-|---|---|
-| Fresh | Serve cached data |
-| Expired, refresh succeeds | Store validated updates and serve refreshed data |
-| Expired, refresh fails, usable cache exists | Serve stale data with explicit status |
-| Cache absent, refresh succeeds | Store and serve data |
-| Cache absent, refresh fails | Return a mapped upstream error |
-| Provider confirms no games in period | Return an empty valid result |
-| Provider response is malformed | Treat as provider/data error, not a valid empty result |
-
-The frontend must not imply that stale cached values are current.
-
-## 14. Frontend Requirements
-
-### 14.1 Main page
-
-Provide:
-- Username input
-- Search/submit action
-- Username validation
-- Loading indicator
-- Clear error messages
-- A primary overview dashboard
-- Navigation or sections for ratings, openings, opponents, and games
-- Freshness and partial-data indicators
-
-### 14.2 Overview
-
-Display:
-- Total eligible games
-- Wins, losses, and draws
-- Win rate
-- Current streak
-- Longest winning streak
-- Current Rapid rating, if available
-
-All values must be consistent with the API's definitions.
-
-### 14.3 Rating history
-
-Display available rating observations in a chart.
-
-Requirements:
-- Label axes and units.
-- Show timestamps in a readable local display format while retaining UTC in the API.
-- Do not fabricate points for missing dates.
-- Show an empty state when no reliable observations exist.
-- Indicate incomplete coverage where relevant.
-
-### 14.4 Openings
-
-Display opening name, sample size, outcomes, and win rate.
-
-Requirements:
-- Make sample sizes visible.
-- Allow deterministic sorting.
-- Label unknown openings honestly.
-- Avoid claiming that an opening caused a particular result.
-
-### 14.5 Opponents
-
-Display opponent identity, game count, and outcome summary.
-
-Requirements:
-- Make the player's perspective clear.
-- Avoid merging identities based only on similar names.
-- Provide an empty state when no opponent data exists.
-
-### 14.6 Games
-
-Display a paginated list of eligible games.
-
-Where available, show:
-- Date
-- Opponent
-- Outcome
-- Player/opponent rating information
-- Opening
-- Link to the source game
-
-Individual game details must degrade gracefully when PGN or optional fields are unavailable.
-
-### 14.7 Shared data states
-
-Every major data section must handle:
-- Loading
-- Success
-- Empty
-- Partial
-- Stale
-- Error
-
-A failure in the opening-statistics endpoint should not automatically hide a valid overview if the API can serve the overview independently.
-
-Do not show a successful-looking empty chart while data is still loading or unavailable.
-
-## 15. Non-Functional Requirements
-
-### Correctness
-- Analytics must be deterministic for identical normalized inputs and metric version.
-- The same game must not count twice.
-- All relevant endpoints must use consistent filtering and outcome rules.
-
-### Reliability
-- Provider failures must be bounded by timeouts.
-- Retries must be limited.
-- Last-known-good data must survive failed refreshes.
-- Invalid individual games must not unnecessarily destroy valid aggregate data.
-
-### Security
-- Validate usernames and all external data.
-- Use parameterized database operations.
-- Keep credentials and database URLs in environment variables.
-- Do not expose secrets or stack traces.
-- Apply request limits and input length limits.
-- Protect against resource exhaustion through bounded page sizes and bounded parsing workloads.
-
-### Performance
-- Use indexes for common lookup and time-filtered queries.
-- Avoid duplicate upstream requests.
-- Keep API responses bounded.
-- Measure performance before introducing additional infrastructure.
-
-Numeric latency targets should be established after measuring representative workloads rather than invented without a baseline.
-
-### Accessibility
-- Support keyboard navigation.
-- Use semantic HTML and accessible labels.
-- Ensure charts have a textual summary or accessible data alternative.
-- Provide readable contrast and visible focus states.
-- Do not rely on color alone to distinguish wins, losses, and draws.
-
-### Observability
-- Log request failures and refresh outcomes using structured logs.
-- Use a request identifier for troubleshooting.
-- Record safe operational metrics such as cache hits, refresh failures, provider latency, and malformed-record counts.
-- Never log secrets or unnecessarily retain sensitive request data.
-
-## 16. Testing Strategy
-
-### Unit tests
-
-Cover:
-- Username normalization
-- Date-window filtering
-- Rapid-only filtering
-- Outcome normalization
-- Win-rate calculation
-- Zero-game handling
-- Streak calculation
-- Opening grouping
-- Opponent grouping
-- Missing and unknown values
-
-### Provider tests
-
-Use mocked HTTP responses or fixtures to cover:
-- Successful player lookup
-- Confirmed missing player
-- Empty archive
-- Mixed eligible and ineligible games
-- Missing optional fields
-- Malformed records
-- Rate limiting
-- Timeout
-- Server error
-- Invalid response format
-
-### Database tests
-
-Cover:
-- Uniqueness constraints
-- Idempotent upserts
-- Player-game associations
-- Transaction rollback
-- Date-filtered retrieval
-- Migration application
-
-### API tests
-
-Cover:
-- Valid player
-- Invalid username
-- Confirmed missing player
-- Empty period
-- Partial data
-- Stale cache
-- Provider outage with cache
-- Provider outage without cache
-- Pagination
-- Missing game
-- Response schema consistency
-
-### Frontend tests
-
-Cover:
-- Search submission
-- Validation
-- Loading state
-- Overview rendering
-- Null metrics
-- Empty and partial data
-- Stale-data warning
-- API errors
-- Game list and detail navigation
-
-### Integration tests
-
-Use a test PostgreSQL database or a documented test setup. The ordinary test suite must not depend on live Chess.com uptime.
-
-## 17. Configuration and Environment
-
-Provide `.env.example` with documented non-secret defaults.
-
-Potential settings:
-- `DATABASE_URL`
-- `CHESS_COM_USER_AGENT`, if required by current provider documentation
-- `CACHE_TTL_SECONDS`
-- `UPSTREAM_TIMEOUT_SECONDS`
-- `UPSTREAM_MAX_RETRIES`
-- `LOG_LEVEL`
-- `CORS_ORIGINS`
-
-Never commit production credentials.
-
-Validate required configuration at startup and fail with a safe, actionable error.
-
-## 18. Deployment and Local Development
-
-The repository should support a documented local development workflow.
-
-Expected setup:
-1. Install or start PostgreSQL.
-2. Configure environment variables.
-3. Install backend dependencies.
-4. Run Alembic migrations.
-5. Start FastAPI.
-6. Install frontend dependencies.
-7. Start the Vite development server.
-8. Run backend and frontend tests.
-
-Docker Compose may provide PostgreSQL and optional application containers.
-
-The README must document ports, startup commands, migrations, testing, and common configuration issues.
-
-## 19. MVP Release Criteria
-
-The MVP is ready when:
-
-1. A user can submit a valid Chess.com username without registering.
-2. The application resolves the player or reports a clear error.
-3. Only eligible completed Rapid games from the rolling 30-day period contribute to the analytics.
-4. Overview counts and win rate are correct.
-5. Streaks are calculated according to the documented rules.
-6. Available rating observations are displayed without fabricated values.
-7. Opening and opponent statistics are computed from normalized data.
-8. Users can browse games and open supported game details.
-9. Unknown, empty, stale, partial, and unavailable data are distinguishable.
-10. Provider failures do not erase last-known-good data.
-11. Automated tests cover the critical analytics and failure cases.
-12. The application can be started locally using documented instructions.
-13. The provider integration has been checked against current official documentation and applicable terms.
-14. No engine-dependent metric is presented as if it were implemented.
-
-## 20. Open Decisions and Verification Items
-
-Resolve these through implementation research or explicit product approval:
-
-- Exact Chess.com endpoints and field availability
-- Provider terms, attribution, and caching requirements
-- Whether source identifiers are stable enough for the proposed game keys
-- Whether sufficient Rapid rating observations exist for useful historical charts
-- Which opening mapping source can legally and reliably be used
-- Exact cache TTL after reviewing provider guidance
-- Whether raw PGN should be stored permanently, temporarily, or fetched on demand
-- Whether frontend routing needs a dedicated routing library
-- Deployment provider and production resource limits
-
-Do not block unrelated work while investigating a question that affects only a later stage. Record the decision and its consequences before implementing the affected feature.
+Store only data needed for the product and permitted by provider terms. Define a retention
+and cleanup policy before introducing large-scale historical ingestion.

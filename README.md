@@ -86,6 +86,21 @@ curl http://localhost:8000/health
 `GET /health` is an unversioned liveness endpoint; it does not query the database.
 Business endpoints will live under `/api/v1`.
 
+### Windows notes (Git Bash + Docker Desktop)
+
+- Activate the virtual environment with `source .venv/Scripts/activate` (not
+  `.venv/bin/activate`); the interpreter is `backend/.venv/Scripts/python.exe`.
+- `python3` may be the Microsoft Store placeholder. Use `python` inside the activated
+  environment, or `py -3.12` when creating it.
+- Write `127.0.0.1` in `DATABASE_URL`, not `localhost`: on Windows `localhost` resolves to
+  IPv6 `::1` first, Docker publishes the port on IPv4 only, and Alembic then hangs.
+- If port 5432 is already used by a local PostgreSQL, keep `POSTGRES_PORT=55432` (the
+  default in `.env.example`) and use the same port in `DATABASE_URL`.
+- npm 11 does not run dependency install scripts by default. If Vite fails with an
+  esbuild error, run `npm install-scripts approve esbuild && npm rebuild esbuild`.
+- Docker Desktop must be running before `docker compose up -d db`; `docker compose ps`
+  should report the `db` service as `healthy`.
+
 ## Configuration
 
 All settings come from environment variables (or the repository-root `.env`).

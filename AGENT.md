@@ -200,13 +200,16 @@ Do not display placeholders that look like real calculated values.
 
 Planned endpoints:
 
-- `GET /api/v1/players/{username}`
 - `GET /api/v1/players/{username}/overview`
 - `GET /api/v1/players/{username}/rating-history`
 - `GET /api/v1/players/{username}/openings`
 - `GET /api/v1/players/{username}/opponents`
 - `GET /api/v1/players/{username}/games`
 - `GET /api/v1/players/{username}/games/{game_id}`
+
+The plain player lookup from `spec.md` §9.1 (`GET /api/v1/players/{username}`) is not
+exposed by the MVP: the overview response already carries the resolved username, the
+profile link, the current rating and the freshness metadata that the dashboard needs.
 
 The detailed contract is defined in `spec.md`.
 
