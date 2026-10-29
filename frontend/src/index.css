@@ -1,7 +1,117 @@
 @import 'tailwindcss';
 
-/* Visible keyboard focus everywhere, not only where a component sets it. */
-:focus-visible {
-  outline: 2px solid #4f46e5;
-  outline-offset: 2px;
+/* ---------------------------------------------------------------------------
+   Design tokens
+   A dark "analysis board" palette: near-black surfaces, ivory text, mint as the
+   single accent, gold/coral reserved for data states. Display headings use a
+   serif face so the dashboard reads like an editorial report rather than a
+   default admin table.
+   --------------------------------------------------------------------------- */
+@theme {
+  --color-board-950: #05080c;
+  --color-board-900: #080d13;
+  --color-board-850: #0b1119;
+  --color-board-800: #0e151e;
+  --color-board-700: #16202b;
+  --color-board-600: #1f2d3b;
+  --color-board-500: #2b3d4e;
+
+  --color-chalk-50: #f8f5ee;
+  --color-chalk-100: #ece7db;
+  --color-chalk-200: #d8d1c2;
+  --color-chalk-300: #b6b0a3;
+  --color-chalk-400: #8d887d;
+  --color-chalk-500: #6d6a63;
+
+  --color-mint-200: #b9f2db;
+  --color-mint-300: #86e6c0;
+  --color-mint-400: #4fd6a4;
+  --color-mint-500: #2bb888;
+
+  --color-gold-300: #f3d492;
+  --color-gold-400: #e4b964;
+
+  --color-coral-300: #f3a5a1;
+  --color-coral-400: #e67b76;
+
+  --font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono:
+    ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+
+  --shadow-lift: 0 30px 70px -40px rgb(0 0 0 / 0.95);
+
+  --animate-rise: rise 0.45s cubic-bezier(0.22, 0.68, 0.24, 1) both;
+  --animate-fade: fade 0.3s ease-out both;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    scrollbar-color: var(--color-board-600) var(--color-board-950);
+  }
+
+  body {
+    min-height: 100vh;
+    background-color: var(--color-board-950);
+    /* Two soft glows plus a faint chessboard grid. Fixed so panels scroll over it. */
+    background-image:
+      radial-gradient(70rem 42rem at 82% -12%, rgb(79 214 164 / 0.1), transparent 62%),
+      radial-gradient(52rem 36rem at -8% 4%, rgb(120 148 255 / 0.07), transparent 58%),
+      linear-gradient(to right, rgb(255 255 255 / 0.022) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.022) 1px, transparent 1px);
+    background-size:
+      auto,
+      auto,
+      52px 52px,
+      52px 52px;
+    background-attachment: fixed;
+    color: var(--color-chalk-100);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: var(--color-mint-400);
+    color: var(--color-board-950);
+  }
+
+  /* Visible keyboard focus everywhere, not only where a component sets it. */
+  :focus-visible {
+    outline: 2px solid var(--color-mint-400);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

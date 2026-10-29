@@ -4,9 +4,11 @@ import { validateUsername } from '../../utils/format';
 
 export function SearchForm({
   initialValue = '',
+  compact = false,
   onSearch,
 }: {
   initialValue?: string;
+  compact?: boolean;
   onSearch: (username: string) => void;
 }) {
   const [value, setValue] = useState(initialValue);
@@ -26,15 +28,30 @@ export function SearchForm({
   }
 
   return (
-    <form
-      onSubmit={submit}
-      noValidate
-      className="flex w-full flex-col gap-2 sm:flex-row sm:items-start"
-    >
-      <div className="flex-1">
-        <label htmlFor={inputId} className="block text-sm font-medium text-slate-700">
-          Chess.com username
-        </label>
+    <form onSubmit={submit} noValidate className="w-full">
+      <label
+        htmlFor={inputId}
+        className={
+          compact
+            ? 'sr-only'
+            : 'block text-[11px] font-medium uppercase tracking-[0.16em] text-chalk-400'
+        }
+      >
+        Chess.com username
+      </label>
+      <div
+        className={`flex items-stretch gap-2 rounded-2xl border bg-board-900/80 p-1.5 shadow-lift backdrop-blur-sm transition focus-within:ring-4 focus-within:ring-mint-400/10 ${
+          error
+            ? 'border-coral-400/60 focus-within:border-coral-400/80'
+            : 'border-white/10 focus-within:border-mint-400/60'
+        } ${compact ? '' : 'mt-2'}`}
+      >
+        <span
+          aria-hidden="true"
+          className="grid w-10 shrink-0 place-items-center font-display text-xl text-chalk-500"
+        >
+          ♟
+        </span>
         <input
           id={inputId}
           name="username"
@@ -45,21 +62,24 @@ export function SearchForm({
           onChange={(e) => setValue(e.target.value)}
           aria-invalid={error !== null}
           aria-describedby={error ? errorId : undefined}
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
           placeholder="e.g. hikaru"
+          className="min-w-0 flex-1 bg-transparent py-2.5 text-base text-chalk-50 placeholder:text-chalk-500 focus-visible:outline-none"
         />
-        {error && (
-          <p id={errorId} role="alert" className="mt-1 text-sm text-red-700">
-            {error}
-          </p>
-        )}
+        <button
+          type="submit"
+          className="shrink-0 rounded-xl bg-mint-400 px-4 py-2 text-sm font-semibold text-board-950 transition hover:bg-mint-300 sm:px-5"
+        >
+          Analyze
+          <span aria-hidden="true" className="ml-1.5">
+            →
+          </span>
+        </button>
       </div>
-      <button
-        type="submit"
-        className="rounded-md bg-indigo-700 px-4 py-2 font-medium text-white hover:bg-indigo-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 sm:mt-6"
-      >
-        Analyze
-      </button>
+      {error && (
+        <p id={errorId} role="alert" className="mt-2 text-sm text-coral-300">
+          {error}
+        </p>
+      )}
     </form>
   );
 }
