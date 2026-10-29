@@ -57,6 +57,8 @@ def test_mvp_tables_are_registered() -> None:
         "player_games",
         "openings",
         "cache_metadata",
+        "analysis_jobs",
+        "game_analysis",
     }
 
 

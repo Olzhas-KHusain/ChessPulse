@@ -68,6 +68,21 @@ class Settings(BaseSettings):
     # when longer), so outages and rate limits are not hammered.
     refresh_failure_cooldown_seconds: int = Field(default=300, ge=0, le=24 * 3600)
 
+    # --- Engine analysis --------------------------------------------------------
+    # Absolute path to a Stockfish binary. Empty means "look for `stockfish` on PATH".
+    stockfish_path: str = ""
+    # Fixed-depth profile. Depth 12 is fast enough for a background worker and
+    # deep enough to separate ordinary inaccuracies from real blunders.
+    analysis_depth: int = Field(default=12, ge=6, le=30)
+    analysis_threads: int = Field(default=1, ge=1, le=64)
+    analysis_hash_mb: int = Field(default=64, ge=16, le=4096)
+    analysis_move_timeout_seconds: float = Field(default=30.0, gt=0, le=600)
+    # Claims after which a repeatedly failing job stays failed until re-requested.
+    analysis_job_max_attempts: int = Field(default=3, ge=1, le=10)
+    analysis_worker_poll_seconds: float = Field(default=2.0, ge=0.1, le=60)
+    # A job left running longer than this is assumed to belong to a dead worker.
+    analysis_stale_job_minutes: int = Field(default=30, ge=1, le=24 * 60)
+
     @field_validator("database_url")
     @classmethod
     def _validate_database_url(cls, value: SecretStr) -> SecretStr:

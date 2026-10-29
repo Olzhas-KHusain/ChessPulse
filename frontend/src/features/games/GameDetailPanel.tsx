@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 
 import { DataStatusBanner, Section } from '../../components/StateViews';
 import { Badge, Eyebrow, Panel } from '../../components/ui';
+import { AnalysisPanel } from '../analysis/AnalysisPanel';
 import { useApi } from '../../hooks/useApi';
 import type { ChesspulseApi } from '../../services/chesspulseApi';
 import { formatDateTime, formatNumber, MISSING, OUTCOME_LABEL } from '../../utils/format';
@@ -147,6 +148,13 @@ export function GameDetailPanel({
                   )}
                 </Panel>
               </div>
+
+              <AnalysisPanel
+                api={api}
+                username={username}
+                gameId={gameId}
+                playerColor={game.color}
+              />
             </div>
           );
         }}

@@ -2,6 +2,7 @@
  * The only module that talks to the backend. Components never call fetch directly.
  */
 import type {
+  AnalysisState,
   ApiErrorBody,
   GameDetail,
   GameList,
@@ -42,7 +43,12 @@ function isErrorBody(value: unknown): value is ApiErrorBody {
 
 type Params = Record<string, string | number | null | undefined>;
 
-async function getJson<T>(path: string, params: Params = {}, signal?: AbortSignal): Promise<T> {
+async function getJson<T>(
+  path: string,
+  params: Params = {},
+  signal?: AbortSignal,
+  method: 'GET' | 'POST' = 'GET',
+): Promise<T> {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value !== null && value !== undefined && value !== '') query.set(key, String(value));
@@ -51,7 +57,11 @@ async function getJson<T>(path: string, params: Params = {}, signal?: AbortSigna
 
   let response: Response;
   try {
-    response = await fetch(url, { headers: { Accept: 'application/json' }, signal });
+    response = await fetch(url, {
+      method,
+      headers: { Accept: 'application/json' },
+      signal,
+    });
   } catch (cause) {
     if (cause instanceof DOMException && cause.name === 'AbortError') throw cause;
     throw new ApiError(0, 'NETWORK_ERROR', 'The ChessPulse server could not be reached.', null);
@@ -111,6 +121,19 @@ export const chesspulseApi = {
     ),
   game: (username: string, gameId: string, signal?: AbortSignal) =>
     getJson<GameDetail>(`${player(username)}/games/${encodeURIComponent(gameId)}`, {}, signal),
+  analysis: (username: string, gameId: string, signal?: AbortSignal) =>
+    getJson<AnalysisState>(
+      `${player(username)}/games/${encodeURIComponent(gameId)}/analysis`,
+      {},
+      signal,
+    ),
+  requestAnalysis: (username: string, gameId: string, signal?: AbortSignal) =>
+    getJson<AnalysisState>(
+      `${player(username)}/games/${encodeURIComponent(gameId)}/analysis`,
+      {},
+      signal,
+      'POST',
+    ),
 };
 
 export type ChesspulseApi = typeof chesspulseApi;

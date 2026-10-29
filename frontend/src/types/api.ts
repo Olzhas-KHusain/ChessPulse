@@ -147,3 +147,46 @@ export interface GameDetail extends DatasetMeta {
 export interface ApiErrorBody {
   error: { code: string; message: string; request_id: string };
 }
+
+export type MoveClassification = 'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder';
+
+export interface AnalysedMove {
+  ply: number;
+  move_number: number;
+  color: 'white' | 'black';
+  san: string;
+  uci: string;
+  eval_before_cp: number;
+  eval_cp: number;
+  mate: number | null;
+  best_move_uci: string | null;
+  best_move_san: string | null;
+  cp_loss: number;
+  classification: MoveClassification;
+}
+
+export interface PlayerAnalysisSummary {
+  accuracy: number | null;
+  acpl: number | null;
+  moves: number;
+  counts: Record<MoveClassification, number>;
+}
+
+export interface GameAnalysisPayload {
+  schema_version: number;
+  engine: { name: string; version: string; depth: number };
+  players: Record<string, string>;
+  result: string;
+  moves: AnalysedMove[];
+  summary: Record<'white' | 'black', PlayerAnalysisSummary>;
+}
+
+export interface AnalysisState {
+  username: string;
+  game_id: string;
+  status: 'missing' | 'queued' | 'running' | 'completed' | 'failed';
+  error_code: string | null;
+  requested_at: string | null;
+  completed_at: string | null;
+  analysis: GameAnalysisPayload | null;
+}

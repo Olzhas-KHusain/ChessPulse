@@ -24,7 +24,7 @@ Chess.com provider, ingestion, cache policy, overview, breakdown and games APIs,
 ```
 backend/     FastAPI modular monolith (app/, migrations/, tests/)
 frontend/    React + Vite application (src/)
-docs/specs/  Feature specifications (database-schema.md)
+docs/specs/  Feature specifications (database-schema.md, api-*.md)
 docker-compose.yml   Local PostgreSQL only
 .env.example         Configuration template (copy to .env)
 ```
@@ -50,7 +50,7 @@ cd backend
 python3 -m venv .venv
 source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
-alembic upgrade head         # creates/updates the schema (revisions 0001, 0002)
+alembic upgrade head         # creates/updates the schema (revisions 0001–0003)
 cd ..
 
 # 4. Frontend (first time: npm install creates package-lock.json; commit it, later use npm ci)
@@ -84,7 +84,33 @@ curl http://localhost:8000/health
 ```
 
 `GET /health` is an unversioned liveness endpoint; it does not query the database.
-Business endpoints will live under `/api/v1`.
+Business endpoints live under `/api/v1`.
+
+### Engine analysis worker
+
+Engine analysis is asynchronous. The API only enqueues a job; a separate worker
+process runs Stockfish and stores the result.
+
+```bash
+winget install Stockfish.Stockfish          # Windows; or install Stockfish another way
+# .env: STOCKFISH_PATH=C:\...\stockfish.exe (empty = search PATH)
+
+cd backend
+source .venv/bin/activate
+python -m app.worker                        # loop forever
+python -m app.worker --once                 # process at most one job
+```
+
+The worker claims jobs with `FOR UPDATE SKIP LOCKED`, so several workers can run in
+parallel without sharing a game. Results are cached per `(game, profile)`, where the
+profile is the configured depth, thread count and hash size.
+
+Endpoints:
+
+- `POST /api/v1/players/{username}/games/{game_id}/analysis` — request (idempotent;
+  returns the cached result when it already exists).
+- `GET  /api/v1/players/{username}/games/{game_id}/analysis` — current state
+  (`missing`, `queued`, `running`, `completed`, `failed`) and the payload when done.
 
 ### Windows notes (Git Bash + Docker Desktop)
 
@@ -120,6 +146,10 @@ with a message that names the variable but never prints its value.
 | `UPSTREAM_MAX_RETRY_AFTER_SECONDS` | no     | Longest Retry-After/backoff waited, `10` by default (0–120)    |
 | `CACHE_TTL_SECONDS`              | no       | Dataset freshness, `43200` (12 h) by default                   |
 | `REFRESH_FAILURE_COOLDOWN_SECONDS` | no     | Wait after a failed refresh, `300` by default                  |
+| `STOCKFISH_PATH`                 | no       | Stockfish executable; empty = search `PATH`                    |
+| `ANALYSIS_DEPTH`                 | no       | Fixed search depth, `12` by default (6–30)                     |
+| `ANALYSIS_THREADS` / `ANALYSIS_HASH_MB` | no | Engine threads (`1`) and hash size (`64`)                    |
+| `ANALYSIS_JOB_MAX_ATTEMPTS`      | no       | Claims before a failing job stays failed, `3` by default       |
 | `POSTGRES_USER/PASSWORD/DB/PORT` | compose  | Used by `docker-compose.yml`; keep in sync with `DATABASE_URL` |
 | `VITE_DEV_PROXY_TARGET`          | no       | Backend URL for the Vite dev proxy                             |
 | `VITE_API_BASE_URL`              | no       | API base URL for built bundles (empty = same origin)           |
@@ -128,9 +158,10 @@ The values in `.env.example` are local-development placeholders, not real creden
 
 ## Database schema and migrations (Alembic)
 
-The MVP schema has five tables: `players`, `games`, `player_games`, `openings`,
-`cache_metadata`. Keys, constraints, deletion rules, UTC handling, and the differences
-from `spec.md` are documented in `docs/specs/database-schema.md`.
+The schema has seven tables: `players`, `games`, `player_games`, `openings`,
+`cache_metadata`, `analysis_jobs`, `game_analysis`. Keys, constraints, deletion rules, UTC
+handling, and the differences from `spec.md` are documented in
+`docs/specs/database-schema.md`.
 
 Run from `backend/` with the virtual environment active. The URL is read from
 `DATABASE_URL`, not from `alembic.ini`.

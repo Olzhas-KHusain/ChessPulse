@@ -14,9 +14,11 @@ from app.cache.service import PlayerDatasetCache
 from app.core.config import Settings
 from app.models import PlayerResult
 from app.providers.base import GameDataProvider
+from app.schemas.analysis import AnalysisStateResponse
 from app.schemas.breakdowns import OpeningsResponse, OpponentsResponse, RatingHistoryResponse
 from app.schemas.games import GameDetailResponse, GameListResponse
 from app.schemas.overview import ErrorResponse, OverviewResponse
+from app.services.analysis import AnalysisService
 from app.services.breakdowns import MAX_LIMIT, BreakdownService
 from app.services.games import DEFAULT_GAMES_LIMIT, MAX_GAMES_LIMIT, GamesService
 from app.services.overview import OverviewService
@@ -153,3 +155,43 @@ def get_game(
 ) -> GameDetailResponse:
     service = GamesService(session, PlayerDatasetCache(session, provider, settings))
     return service.get_game(username, game_id, now)
+
+
+def _analysis_service(
+    session: Session, provider: GameDataProvider, settings: Settings
+) -> AnalysisService:
+    return AnalysisService(session, PlayerDatasetCache(session, provider, settings), settings)
+
+
+@router.get(
+    "/{username}/games/{game_id}/analysis",
+    response_model=AnalysisStateResponse,
+    responses=_ERRORS,
+    summary="Engine analysis of one game (missing, queued, running, completed or failed)",
+)
+def get_game_analysis(
+    username: Username,
+    game_id: Annotated[str, Path(description="Provider game id from the list, e.g. live:123")],
+    session: Annotated[Session, Depends(get_session)],
+    provider: Annotated[GameDataProvider, Depends(get_provider)],
+    settings: Annotated[Settings, Depends(get_settings_dep)],
+    now: Annotated[datetime, Depends(get_now)],
+) -> AnalysisStateResponse:
+    return _analysis_service(session, provider, settings).get_state(username, game_id, now)
+
+
+@router.post(
+    "/{username}/games/{game_id}/analysis",
+    response_model=AnalysisStateResponse,
+    responses=_ERRORS,
+    summary="Request engine analysis (idempotent: returns the cached result when present)",
+)
+def request_game_analysis(
+    username: Username,
+    game_id: Annotated[str, Path(description="Provider game id from the list, e.g. live:123")],
+    session: Annotated[Session, Depends(get_session)],
+    provider: Annotated[GameDataProvider, Depends(get_provider)],
+    settings: Annotated[Settings, Depends(get_settings_dep)],
+    now: Annotated[datetime, Depends(get_now)],
+) -> AnalysisStateResponse:
+    return _analysis_service(session, provider, settings).request(username, game_id, now)

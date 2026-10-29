@@ -1,5 +1,6 @@
 /** Synthetic API responses for component tests (shapes match docs/specs/api-*.md). */
 import type {
+  AnalysisState,
   GameDetail,
   GameList,
   GameSummary,
@@ -144,6 +145,88 @@ export function gameSummary(id: number, opponent = `rival_${id}`): GameSummary {
     rated: true,
     opening: null,
     game_url: `https://www.chess.com/game/live/${id}`,
+  };
+}
+
+export const missingAnalysis: AnalysisState = {
+  username: 'example_player',
+  game_id: 'live:1',
+  status: 'missing',
+  error_code: null,
+  requested_at: null,
+  completed_at: null,
+  analysis: null,
+};
+
+export function completedAnalysis(): AnalysisState {
+  return {
+    ...missingAnalysis,
+    status: 'completed',
+    completed_at: '2026-10-20T12:05:00Z',
+    analysis: {
+      schema_version: 1,
+      engine: { name: 'Stockfish', version: '19', depth: 12 },
+      players: { white: 'example_player', black: 'rival_1' },
+      result: '1-0',
+      moves: [
+        {
+          ply: 1,
+          move_number: 1,
+          color: 'white',
+          san: 'e4',
+          uci: 'e2e4',
+          eval_before_cp: 20,
+          eval_cp: 25,
+          mate: null,
+          best_move_uci: 'e2e4',
+          best_move_san: 'e4',
+          cp_loss: 0,
+          classification: 'best',
+        },
+        {
+          ply: 2,
+          move_number: 1,
+          color: 'black',
+          san: 'e5',
+          uci: 'e7e5',
+          eval_before_cp: 25,
+          eval_cp: 30,
+          mate: null,
+          best_move_uci: 'e7e5',
+          best_move_san: 'e5',
+          cp_loss: 0,
+          classification: 'best',
+        },
+        {
+          ply: 3,
+          move_number: 2,
+          color: 'white',
+          san: 'Nf3',
+          uci: 'g1f3',
+          eval_before_cp: 30,
+          eval_cp: 180,
+          mate: null,
+          best_move_uci: 'f1c4',
+          best_move_san: 'Bc4',
+          cp_loss: 150,
+          classification: 'mistake',
+        },
+      ],
+      summary: {
+        white: {
+          accuracy: 84,
+          acpl: 50,
+          moves: 2,
+          counts: { best: 1, good: 0, inaccuracy: 0, mistake: 1, blunder: 0 },
+        },
+        black: {
+          accuracy: 90,
+          acpl: 20,
+          moves: 1,
+          counts: { best: 1, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 },
+        },
+      },
+    },
   };
 }
 

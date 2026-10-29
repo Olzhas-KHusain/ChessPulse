@@ -78,6 +78,19 @@ class CacheResourceType(StrEnum):
     PLAYER_DATASET = "player_dataset"
 
 
+class AnalysisJobStatus(StrEnum):
+    """Lifecycle of one engine-analysis job.
+
+    ``queued`` jobs are claimed by a worker with ``FOR UPDATE SKIP LOCKED``; the
+    worker moves the row to ``running``, then to ``completed`` or ``failed``.
+    """
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class CacheStatus(StrEnum):
     """Outcome of the most recent refresh attempt for a cached resource.
 

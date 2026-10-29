@@ -30,6 +30,14 @@ EXPECTED_INDEXES = {
         "ix_cache_metadata_player_id",
         "uq_cache_metadata_cache_key",
     },
+    "analysis_jobs": {
+        "ix_analysis_jobs_status_created_at",
+        "uq_analysis_jobs_game_profile",
+    },
+    "game_analysis": {
+        "ix_game_analysis_profile_hash",
+        "uq_game_analysis_game_profile",
+    },
 }
 
 

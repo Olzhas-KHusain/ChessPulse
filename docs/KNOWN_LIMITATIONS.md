@@ -39,11 +39,30 @@
 - **PGN** is stored permanently when supplied (open decision, spec §20).
 - **Conditional requests** (`If-None-Match`) are not sent; validators are captured.
 
+## Engine analysis
+
+- **Fixed depth, one thread by default.** Depth 12 with one thread is chosen for a
+  responsive local worker; it can miss deep tactics that a longer search would find.
+  Changing the depth or hash/thread settings changes the cache key, so old results are
+  kept but not reused.
+- **Game accuracy is a mean**, not a weighted average. A game with many trivial moves and
+  one blunder therefore scores higher than a sharp game with the same blunder. The UI
+  labels it "mean move accuracy".
+- **No rating estimate.** Accuracy does not identify an Elo, and ChessPulse does not derive
+  one. Only the provider's reported ratings and the player's current rating are shown.
+- **Labels are threshold-based.** `best` / `good` / `inaccuracy` / `mistake` / `blunder`
+  use fixed centipawn-loss cut-offs; they are not a judgment of intent.
+- **Per-game only.** There is no cross-game aggregate of accuracy, blunders or leaks yet.
+- **One worker process** is enough for local use; more workers can run safely, but there
+  is no scheduler, priority or per-user quota.
+- **Payload size.** A full game stores one JSONB document (roughly 10–40 kB); aggregate
+  queries over many games will need a summary table rather than JSONB scans.
+- **PGN is required.** Games without a PGN cannot be analysed and fail with `missing_pgn`.
+
 ## Explicitly deferred (not in the MVP)
 
-- Engine analysis: accuracy, Brilliant moves, blunders, centipawn loss, estimated Elo
-  (spec §6.10). The adapter ignores the provider's `accuracies` field; no such value is
-  shown anywhere.
+- Cross-game engine aggregates (accuracy trend, leak attribution, practice queue).
+- "Brilliant" or other narrative labels without a written, verifiable definition.
 - `player_statistics` aggregate table (not needed; aggregates are computed per request).
 - Blitz, Bullet, Daily and variant analytics; windows other than 30 days.
 - Accounts, authentication, private Chess.com data.

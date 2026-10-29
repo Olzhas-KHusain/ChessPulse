@@ -168,11 +168,19 @@ Adapt this layout to existing repository conventions instead of duplicating an e
 - Keep provider-specific parsing inside the provider integration layer.
 
 ### Engine-dependent metrics
-The MVP does not calculate engine-based accuracy, Brilliant moves, blunders, centipawn loss, or engine-estimated Elo.
+Engine analysis is implemented as an opt-in, asynchronous feature. Stockfish runs in a
+separate worker process (`python -m app.worker`); the API only enqueues and reads results.
 
-These features require a separately scoped engine-analysis stage, likely involving Stockfish and additional computational controls.
+Rules that remain mandatory:
 
-Do not display placeholders that look like real calculated values.
+- Every engine number must name the engine, version, depth and profile it came from.
+- Accuracy is the documented mean of per-move win-probability retention. Never present it
+  as an Elo estimate, and never derive a rating from it.
+- Move labels use documented centipawn-loss thresholds; do not add labels ("Brilliant",
+  "Great", "Book") without a written, verifiable definition.
+- A game without a usable PGN fails its own analysis only; it must never fail a request or
+  another game.
+- Do not display placeholders that look like real calculated values.
 
 ## 6. Caching and Failure Handling
 

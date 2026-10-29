@@ -26,6 +26,8 @@ function fakeApi(overrides: Partial<ChesspulseApi> = {}): ChesspulseApi {
     opponents: vi.fn().mockResolvedValue(fx.opponents),
     games: vi.fn().mockResolvedValue(fx.gameList([1, 2], null)),
     game: vi.fn().mockResolvedValue(fx.gameDetail(1, 'available')),
+    analysis: vi.fn().mockResolvedValue(fx.missingAnalysis),
+    requestAnalysis: vi.fn().mockResolvedValue(fx.missingAnalysis),
     ...overrides,
   };
 }
@@ -256,5 +258,31 @@ describe('games', () => {
       await screen.findByRole('button', { name: /Details of the game against rival_1/ }),
     );
     expect(await screen.findByText(new RegExp(text.replace(/[()]/g, '\\$&')))).toBeTruthy();
+  });
+
+  it('requests engine analysis and shows accuracy with key moments', async () => {
+    const requestAnalysis = vi.fn().mockResolvedValue(fx.completedAnalysis());
+    render(
+      <App
+        api={fakeApi({
+          analysis: vi.fn().mockResolvedValue(fx.missingAnalysis),
+          requestAnalysis,
+        })}
+      />,
+    );
+    search('example_player');
+    await openTab('Games');
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Details of the game against rival_1/ }),
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Analyze with Stockfish' }));
+
+    expect(await screen.findByText('Accuracy and key moments')).toBeTruthy();
+    expect(screen.getByText('84.0%')).toBeTruthy();
+    expect(screen.getByText('90.0%')).toBeTruthy();
+    expect(screen.getByText('Nf3')).toBeTruthy();
+    expect(screen.getByText(/best was Bc4/)).toBeTruthy();
+    expect(requestAnalysis).toHaveBeenCalledWith('example_player', 'live:1');
   });
 });

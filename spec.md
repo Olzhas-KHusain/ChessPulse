@@ -206,13 +206,27 @@ Where available, display:
 
 A malformed individual PGN must not cause the entire player analysis to fail.
 
-### 6.10 Deferred engine metrics
+### 6.10 Engine metrics (implemented)
 
-Engine-based metrics are out of MVP scope.
+Engine analysis is available per game and is opt-in. A request records a durable job in
+`analysis_jobs`; a separate worker process (`python -m app.worker`) claims jobs with
+`FOR UPDATE SKIP LOCKED`, evaluates every position with Stockfish to a fixed depth, and
+stores the result in `game_analysis` as versioned JSONB, cached per
+`(game_id, profile_hash)`.
 
-A later engine-analysis stage may evaluate Stockfish integration, computational cost, reproducibility, and licensing/distribution obligations.
+Documented definitions:
 
-Until then, never label a heuristic or unverified estimate as engine accuracy, Brilliant moves, blunders, or estimated Elo.
+- **Win probability**: logistic conversion of centipawns, capped at ±1000 cp.
+- **Per-move accuracy**: `103.1668 * exp(-0.04354 * delta) - 3.1669`, clipped to 0–100,
+  where `delta` is the mover's win-probability loss (the published Lichess formula).
+- **Game accuracy**: the arithmetic mean of the player's per-move accuracies. The UI calls
+  it "mean move accuracy" and never an Elo estimate.
+- **Centipawn loss / ACPL**: `max(0, eval before - eval after)` from the mover's side,
+  capped at 1000 cp per move.
+- **Labels**: `best` (played the engine's top move), `good` (<50 cp), `inaccuracy`
+  (50–99), `mistake` (100–199), `blunder` (≥200). No other labels are assigned.
+
+Engine scores are never presented as exact, and no rating is derived from them.
 
 ## 7. System Architecture
 

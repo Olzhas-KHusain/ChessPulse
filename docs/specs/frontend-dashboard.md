@@ -12,6 +12,7 @@ Status: implemented (Issue 9). Code: `frontend/src/`.
 | `components/StateViews.tsx` | Loading, error, empty views; `DataStatusBanner` for stale/partial data |
 | `features/player` | Search form (validation mirrors the backend rule) and dashboard with tabs |
 | `features/overview`, `rating-history`, `openings`, `games` | Section views |
+| `features/analysis` | Opt-in Stockfish review of one game: request, poll, accuracy cards, key moments |
 | `utils/format.ts` | Formatting; `null` → `—` with screen-reader text "not available" |
 
 No router library: the dashboard uses an accessible tab list (arrow keys, Home/End).
@@ -29,6 +30,9 @@ when opened, so they reuse the refreshed dataset instead of racing it.
   state. One point per game, no interpolation; a table alternative is provided.
 - Unknown openings are labelled "Unknown opening"; sample sizes are always visible.
 - Outcomes are shown as text, not by colour alone.
+- Engine numbers are labelled "mean move accuracy" and come only from the stored analysis
+  payload; the panel names the engine, version and depth, and states that labels use fixed
+  centipawn-loss thresholds and that accuracy is not a rating estimate.
 - Each tab handles its own errors, so one failing section does not hide the others.
 
 ## Dependency

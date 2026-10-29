@@ -1,9 +1,10 @@
 # MVP Release Checklist
 
-Date: 2026-10-29 · Scope: Issues 1–10 · Verdict: **releasable for local use** — every
-automated check, the Docker database, the migrations and the live Chess.com contract have
-been executed (§1). Non-blocking gaps: no production deployment target and no CI yet
-(see `docs/KNOWN_LIMITATIONS.md`).
+Date: 2026-10-29 · Scope: Issues 1–10 plus opt-in Stockfish analysis · Verdict:
+**releasable for local use** — every automated check, the Docker database, the migrations,
+the live Chess.com contract and a real engine analysis have been executed (§1, §3).
+Non-blocking gaps: no production deployment target and no CI yet (see
+`docs/KNOWN_LIMITATIONS.md`).
 
 ## 1. Executed checks (Windows, 2026-10-29)
 
@@ -12,25 +13,26 @@ PostgreSQL 16.9 in Docker Compose on port **55432**, Docker 29.9.1.
 
 | Check | Command | Result |
 | ----- | ------- | ------ |
-| Backend lint | `ruff check .` | ✅ pass (84 files) |
-| Backend format | `ruff format --check .` | ✅ 85 files already formatted |
-| Backend types | `mypy` (strict) | ✅ pass (84 files) |
-| Full backend suite, with PostgreSQL | `pytest` | ✅ **368 passed** |
+| Backend lint | `ruff check app tests migrations` | ✅ pass (99 files) |
+| Backend format | `ruff format --check .` | ✅ 99 files already formatted |
+| Backend types | `mypy` (strict) | ✅ pass (98 source files) |
+| Full backend suite, with PostgreSQL | `pytest` | ✅ **399 passed** |
 | Backend suite without PostgreSQL | `pytest` | ✅ unit tests pass; DB tests skip cleanly |
-| Migrations on the development database | `alembic current` | ✅ `0002 (head)` |
+| Migrations on the development database | `alembic current` | ✅ `0003 (head)` |
 | Model/migration drift | `alembic check` | ✅ no changes detected |
-| Frontend unit/component tests | `npm run test` (Vitest 4.1.12) | ✅ **21 passed** (2 files) |
+| Frontend unit/component tests | `npm run test` (Vitest 4.1.12) | ✅ **22 passed** (2 files) |
 | Frontend lint | `npm run lint` | ✅ 0 errors, 0 warnings |
 | Frontend format | `npm run format:check` | ✅ all files match Prettier |
 | Frontend types | `npm run typecheck` | ✅ clean (`tsconfig` + `tsconfig.node`) |
-| Frontend production build | `npm run build` | ✅ built in ~11 s; one 606.9 kB chunk (183.2 kB gzip) → Vite chunk-size warning only |
+| Frontend production build | `npm run build` | ✅ built in ~11 s; one 634.07 kB chunk (189.53 kB gzip) → Vite chunk-size warning only |
 | Frontend dependency audit | `npm audit` | ✅ **0 vulnerabilities** (after the Vitest 4.1.12 upgrade) |
 | Docker database | `docker compose up -d db` | ✅ `postgres:16.9-alpine`, healthy, `127.0.0.1:55432` |
 | Live Chess.com contract | real requests for `olzhaswlk` | ✅ profile, stats, archives, 2026/09 and 2026/10 archives all `200` |
 | Live end-to-end UI | browser at `http://localhost:5173` | ✅ search → overview → all tabs → pagination → filter → game details → back |
 
 Backend suite history: the 2026-10-20 sandbox run recorded 356 passed; the suite grew to
-361 (restored Issue 1 files) and to 368 after the opening-name normalization tests.
+361 (restored Issue 1 files), to 368 after the opening-name normalization tests, and to
+399 after engine analysis (accuracy math, per-game analysis, API + worker integration).
 
 ## 2. Live data verification (2026-10-29)
 
@@ -52,7 +54,31 @@ openings table with sample sizes, opponents table with perspective labels, game 
 cursor pagination and result filter, game details with the full PGN (57 plies), and the
 "Back to games" button returning to the same page and filter.
 
-## 3. End-to-end verification (automated)
+## 3. Engine analysis verification (2026-10-29)
+
+Stockfish **19** (`winget install Stockfish.Stockfish`, path in `.env`
+`STOCKFISH_PATH`), fixed profile depth 12 / 1 thread / 64 MB hash. The API only
+enqueues; `python -m app.worker --once` performs the search.
+
+| Check | Result |
+| ----- | ------ |
+| Accuracy math (win probability, per-move accuracy, CPL, thresholds) | ✅ 21 pure unit tests (incl. UCI parsing) |
+| Per-game analysis with a deterministic fake engine | ✅ 7 unit tests (all-best, blunders, mate mapping, unusable PGN codes) |
+| API + worker integration on PostgreSQL | ✅ 3 tests: request → queued → worker → completed → cached; repeat POST reuses the result; unknown game `404 GAME_NOT_FOUND`; missing PGN → `failed` + `missing_pgn` |
+| Worker queue claim | ✅ `FOR UPDATE SKIP LOCKED`, `attempts` counter, stale-job requeue SQL |
+| Real game `live:186123080328` (player Black) | ✅ completed in **6.8 s** |
+| White (opponent) accuracy / ACPL | 84.98% / 149.65 (13 blunders) |
+| Black (player) accuracy / ACPL | 86.19% / 132.96 |
+| Engine identity recorded in the payload | ✅ `{"name": "Stockfish", "version": "19", "depth": 12}` |
+| Browser check of the panel | ✅ cached result rendered (86.2% / 85.0%), key moments listed, no console errors |
+| Cache behaviour | ✅ second `POST` returns the stored analysis without a new job |
+
+Definitions live in `spec.md` §6.10 and `AGENT.md`: accuracy is the mean per-move
+retention of the engine's win probability (documented Lichess formula), and **no rating
+is estimated from it**. The UI says "mean move accuracy" and states that labels use fixed
+centipawn-loss thresholds.
+
+## 4. End-to-end verification (automated)
 
 `tests/db/test_e2e_primary_flow.py` runs HTTP API → cache policy → ingestion → the
 real Chess.com adapter (HTTP replaced by `httpx.MockTransport`) → PostgreSQL →
@@ -68,7 +94,7 @@ analytics.
 | Confirmed missing player → `404 PLAYER_NOT_FOUND` | ✅ |
 | Error bodies contain no traceback, library names, provider URL or DB URL | ✅ |
 
-## 4. spec.md §19 release criteria
+## 5. spec.md §19 release criteria
 
 | # | Criterion | Status | Evidence |
 | - | --------- | ------ | -------- |
@@ -82,12 +108,12 @@ analytics.
 | 8 | Browse games and details | ✅ | `App.test.tsx` + live walkthrough (PGN, pagination, filter) |
 | 9 | Unknown/empty/stale/partial/unavailable distinguishable | ✅ | cache + API tests + UI state tests |
 | 10 | Provider failures keep last-known-good data | ✅ | `test_cache.py`, E2E |
-| 11 | Automated tests for analytics and failures | ✅ | 368 backend + 21 frontend tests |
-| 12 | Local start with documented instructions | ✅ | README; Compose and both dev servers executed |
+| 11 | Automated tests for analytics and failures | ✅ | 399 backend + 22 frontend tests |
+| 12 | Local start with documented instructions | ✅ | README; Compose, both dev servers and the analysis worker executed |
 | 13 | Provider checked against official docs and terms | ✅ | `chess-com-provider.md`; live requests on 2026-10-29 |
-| 14 | No engine metric presented as implemented | ✅ | `accuracies` ignored by the adapter; no such field in API/UI (grep verified) |
+| 14 | No unverified engine metric presented | ✅ | Provider `accuracies` still ignored; the only engine numbers are produced by Stockfish with documented definitions (§3) and are labelled as such |
 
-## 5. Security and operations review
+## 6. Security and operations review
 
 | Area | Finding |
 | ---- | ------- |
@@ -95,11 +121,11 @@ analytics.
 | Logs | 3 log statements (provider retry, ingestion summary, cache outcome): usernames, error codes, counts only; no payloads, URLs with credentials or exception text |
 | Error responses | Fixed messages + codes; `request_id` accepted only if alphanumeric/hyphen ≤ 64 chars |
 | Input validation | Username `[A-Za-z0-9_-]{1,64}` before any request; `limit` 1–100; cursors validated and bound to filters; `from`/`to` require a time zone and cannot widen the window |
-| Resource bounds | HTTP timeouts, ≤ 2 retries, 60 s budget per request, 25 MiB response cap (after gzip), PGN ≤ 100 000 chars / 1 000 plies, batched SQL writes |
+| Resource bounds | HTTP timeouts, ≤ 2 retries, 60 s budget per request, 25 MiB response cap (after gzip), PGN ≤ 100 000 chars / 1 000 plies, batched SQL writes; analysis capped at 400 plies and 30 s per engine search |
 | Upstream etiquette | Serial requests, 12 h TTL, cooldown ≥ max(300 s, Retry-After), advisory lock against duplicate refreshes |
-| CORS | Explicit origins, GET only |
+| CORS | Explicit origins, `GET` and `POST` (analysis requests) |
 
-## 6. Remaining before a public deployment
+## 7. Remaining before a public deployment
 
 1. Set `CHESS_COM_USER_AGENT` with real contact information.
 2. Compare `backend/tests/providers/fixtures/` field by field with one real response per
@@ -108,13 +134,16 @@ analytics.
 4. Choose a deployment target and serve the built frontend from the same origin
    (`VITE_API_BASE_URL` empty) or an origin listed in `CORS_ORIGINS`.
 5. Consider code-splitting the frontend bundle (Recharts accounts for most of the
-   606.9 kB single chunk).
+   634.07 kB single chunk).
+6. Install Stockfish on the deployment host (or set `STOCKFISH_PATH`), run at least one
+   `python -m app.worker` process, and monitor the queue; without a worker, analyses stay
+   `queued` forever.
 
-## 7. Dependency versions actually installed
+## 8. Dependency versions actually installed
 
 Backend: SQLAlchemy 2.1.5, Alembic 1.20.0, psycopg 3.3.6, FastAPI 0.149.0,
 pydantic 2.14.1, pydantic-settings 2.16.0, httpx 0.28.1, chess 1.11.2, pytest 9.1.1,
-ruff 0.17.1, mypy 2.4.0.
+ruff 0.17.1, mypy 2.4.0. Engine: Stockfish 19 (external binary, not a Python dependency).
 
 Frontend: React 19.2, Vite 7.3.7, TypeScript 5.9, Tailwind CSS 4.1, Recharts 3.2,
 Vitest 4.1.12, ESLint 9.35, Prettier 3.6. Exact versions are in

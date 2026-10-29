@@ -32,7 +32,15 @@ from app.main import create_app
 from tests.ingestion_helpers import NOW
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
-APP_TABLES = ("cache_metadata", "player_games", "games", "openings", "players")
+APP_TABLES = (
+    "analysis_jobs",
+    "game_analysis",
+    "cache_metadata",
+    "player_games",
+    "games",
+    "openings",
+    "players",
+)
 
 
 def _server_url() -> URL | None:
