@@ -116,7 +116,36 @@ def test_parse_game_id(url: object, expected: str | None) -> None:
             "https://www.chess.com/openings/Sicilian-Defense-Open-2...Nc6",
             ("Sicilian-Defense-Open-2...Nc6", "Sicilian Defense Open 2...Nc6"),
         ),
-        ("https://www.chess.com/openings/Kings-Gambit/", ("Kings-Gambit", "Kings Gambit")),
+        ("https://www.chess.com/openings/Kings-Gambit/", ("Kings-Gambit", "King's Gambit")),
+        (
+            "https://www.chess.com/openings/Caro-Kann-Defense-2.Nc3-d5",
+            ("Caro-Kann-Defense-2.Nc3-d5", "Caro-Kann Defense 2.Nc3 d5"),
+        ),
+        (
+            "https://www.chess.com/openings/Queens-Pawn-Opening-Mikenas-Defense",
+            ("Queens-Pawn-Opening-Mikenas-Defense", "Queen's Pawn Opening Mikenas Defense"),
+        ),
+        (
+            "https://www.chess.com/openings/Sicilian-Defense-Smith-Morra-Gambit-2...cxd4",
+            (
+                "Sicilian-Defense-Smith-Morra-Gambit-2...cxd4",
+                "Sicilian Defense Smith-Morra Gambit 2...cxd4",
+            ),
+        ),
+        (
+            "https://www.chess.com/openings/Giuoco-Piano-Game-Giuoco-Pianissimo-5...O-O",
+            (
+                "Giuoco-Piano-Game-Giuoco-Pianissimo-5...O-O",
+                "Giuoco Piano Game Giuoco Pianissimo 5...O-O",
+            ),
+        ),
+        (
+            "https://www.chess.com/openings/Vienna-Game-3...O-O-O",
+            ("Vienna-Game-3...O-O-O", "Vienna Game 3...O-O-O"),
+        ),
+        # Chess.com's placeholder page is not an opening.
+        ("https://www.chess.com/openings/Undefined", None),
+        ("https://www.chess.com/openings/undefined", None),
         ("https://www.chess.com/openings/", None),
         ("https://www.chess.com/openings/<script>", None),
         ("https://www.chess.com/member/x", None),

@@ -70,6 +70,8 @@ TIME_CLASSES = {tc.value: tc for tc in TimeClass}
 _GAME_PATH_RE = re.compile(r"^/(?:game/(live|daily)|(live|daily)/game)/(\d{1,20})/?$")
 _ARCHIVE_PATH_RE = re.compile(r"^/pub/player/([^/]+)/games/(\d{4})/(\d{2})/?$")
 _OPENING_SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.\-']{0,254}$")
+# Slugs that are not openings at all (Chess.com placeholder page).
+_OPENING_SLUG_PLACEHOLDERS = frozenset({"undefined"})
 _TIME_CONTROL_RE = re.compile(r"^\d{1,6}(?:[+/]\d{1,6})?$")
 _RESULT_CODE_RE = re.compile(r"^[a-z0-9]{1,32}$")
 _ECO_RE = re.compile(r"^[A-E][0-9]{2}$")
@@ -152,7 +154,47 @@ def parse_opening_url(url: object) -> tuple[str, str] | None:
     slug = unquote(path[len(prefix) :]).strip("/")
     if not _OPENING_SLUG_RE.fullmatch(slug):
         return None
-    return slug, slug.replace("-", " ")
+    # Chess.com serves this placeholder page when it has no opening for a game.
+    if slug.casefold() in _OPENING_SLUG_PLACEHOLDERS:
+        return None
+    return slug, _opening_display_name(slug)
+
+
+# A Chess.com opening slug encodes spaces as "-" and drops apostrophes, so the slug
+# alone cannot tell "Caro-Kann" from "Caro Kann". These corrections restore the
+# standard spelling of names whose punctuation the encoding loses. They add no
+# information about the opening: the slug remains the identifier.
+_OPENING_NAME_PHRASES: tuple[tuple[str, str], ...] = (
+    ("Anti Meran", "Anti-Meran"),
+    ("Bogo Indian", "Bogo-Indian"),
+    ("Caro Kann", "Caro-Kann"),
+    ("Mieses Kotrc", "Mieses-Kotrc"),
+    ("Neo Grunfeld", "Neo-Grünfeld"),
+    ("Nimzo Indian", "Nimzo-Indian"),
+    ("Semi Slav", "Semi-Slav"),
+    ("Semi Tarrasch", "Semi-Tarrasch"),
+    ("Smith Morra", "Smith-Morra"),
+)
+_OPENING_NAME_WORDS: dict[str, str] = {
+    "Alekhines": "Alekhine's",
+    "Birds": "Bird's",
+    "Bishops": "Bishop's",
+    "Kings": "King's",
+    "Owens": "Owen's",
+    "Petrovs": "Petrov's",
+    "Queens": "Queen's",
+}
+
+
+def _opening_display_name(slug: str) -> str:
+    """Turn an opening slug into a display name with its standard punctuation."""
+    name = " ".join(_OPENING_NAME_WORDS.get(word, word) for word in slug.split("-"))
+    for phrase, replacement in _OPENING_NAME_PHRASES:
+        name = name.replace(phrase, replacement)
+    # Castling notation ("5...O-O") survives the slug encoding as "5...O O".
+    while "O O" in name:
+        name = name.replace("O O", "O-O")
+    return name
 
 
 def parse_pgn_headers(pgn: str) -> dict[str, str]:
