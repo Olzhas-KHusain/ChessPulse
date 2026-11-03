@@ -14,6 +14,9 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
+  // One shared stack (one database, one analysis worker queue): spec files run
+  // one after another so tests do not fight for the analysis queue.
+  workers: 1,
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
