@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 /** Tabs: rating history, openings, opponents (GitHub issue #2: e2e-test). */
-const username = process.env.E2E_USERNAME ?? 'hikaru';
+const username = process.env.E2E_USERNAME ?? 'olzhaswlk';
 
 test('tabs load independently with their data', async ({ page }) => {
   await page.goto('/');

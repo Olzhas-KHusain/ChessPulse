@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
  * Uses the API-backed UI: request Stockfish once, then confirm the cached
  * result renders without a new job. Requires the compose `worker` service.
  */
-const username = process.env.E2E_USERNAME ?? 'hikaru';
+const username = process.env.E2E_USERNAME ?? 'olzhaswlk';
 
 test('request, complete and cache an engine analysis', async ({ page }) => {
   test.setTimeout(300_000); // Stockfish depth-12 over a full game takes a while.
@@ -35,8 +35,18 @@ test('request, complete and cache an engine analysis', async ({ page }) => {
   await expect(ready).toBeVisible({ timeout: 240_000 });
   await expect(page.getByText(/centipawn loss|ACPL/i).first()).toBeVisible({ timeout: 30_000 });
 
-  // Reload the details: the analysis comes back from the cache, no new job.
-  await page.reload();
+  // The viewport app keeps no route persistently (no client router): after a
+  // reload it returns to the search landing. The cached-analysis path is
+  // verified by navigating back to the list and reopening the same game.
+  await page.getByRole('button', { name: /Back/i }).click();
+  await expect(page.getByRole('button', { name: /^Details of the game against / }).first())
+    .toBeVisible({ timeout: 30_000 });
+  await page
+    .getByRole('button', { name: /^Details of the game against / })
+    .first()
+    .click();
+
+  // Comes back from the cache: result without a new job request.
   await expect(page.getByText(/accuracy/i).first()).toBeVisible({ timeout: 60_000 });
   await expect(page.getByRole('button', { name: 'Analyze with Stockfish' })).toHaveCount(0);
 });

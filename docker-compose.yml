@@ -44,7 +44,8 @@ services:
 
   worker:
     image: chesspulse/app:latest
-    build: .
+    # Same image as `app` (built by the app service above) — the build context
+    # and the pip/npm layers are imported from that build, not rebuilt here.
     restart: unless-stopped
     depends_on:
       db:

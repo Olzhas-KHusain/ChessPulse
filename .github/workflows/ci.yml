@@ -84,7 +84,14 @@ jobs:
           POSTGRES_DB=chesspulse
           EOF
       - name: Start the full stack
-        run: docker compose up --build -d --wait || (docker compose logs --tail=100 && exit 1)
+        run: |
+          docker compose up --build -d --wait || {
+            echo "--- compose ps ---"
+            docker compose ps -a
+            echo "--- app logs ---"
+            docker compose logs --tail=200 app worker
+            exit 1
+          }
       - run: npm ci
         working-directory: frontend
       - name: Install Playwright browsers
@@ -97,7 +104,7 @@ jobs:
         working-directory: frontend
         env:
           E2E_BASE_URL: http://127.0.0.1:8000
-          E2E_USERNAME: ${{ secrets.E2E_USERNAME || 'hikaru' }}
+          E2E_USERNAME: ${{ secrets.E2E_USERNAME || 'olzhaswlk' }}
       - name: Upload traces on failure
         uses: actions/upload-artifact@v4
         if: failure()

@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
  * E2E_USERNAME selects the Chess.com player used for the happy path; any real
  * Rapid player works (defaults to hikaru).
  */
-const username = process.env.E2E_USERNAME ?? 'hikaru';
+const username = process.env.E2E_USERNAME ?? 'olzhaswlk';
 
 test('search, validation and overview metrics', async ({ page }) => {
   await page.goto('/');

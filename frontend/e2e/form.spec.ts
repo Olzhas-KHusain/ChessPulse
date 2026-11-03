@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 /** Cross-game form report (GitHub issue #5: e2e-test). */
-const username = process.env.E2E_USERNAME ?? 'hikaru';
+const username = process.env.E2E_USERNAME ?? 'olzhaswlk';
 
 test('form report aggregates the period and queues remaining analyses', async ({ page }) => {
   test.setTimeout(300_000);
