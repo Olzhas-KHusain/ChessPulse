@@ -27,7 +27,10 @@ and form report APIs, frontend dashboard). Architecture decisions: `docs/adr/`.
 backend/     FastAPI modular monolith (app/, migrations/, tests/)
 frontend/    React + Vite application (src/)
 docs/specs/  Feature specifications (database-schema.md, api-*.md)
-docker-compose.yml   Local PostgreSQL only
+docker-compose.yml   Full stack: app (static FE + API) + worker + db
+infra/               AWS CloudFormation template + deploy notes
+render.yaml          Render blueprint (PaaS)
+.github/workflows/   CI/CD (tests → e2e → build → deploy)
 .env.example         Configuration template (copy to .env)
 ```
 
@@ -154,6 +157,7 @@ with a message that names the variable but never prints its value.
 | `CACHE_TTL_SECONDS`              | no       | Dataset freshness, `43200` (12 h) by default                   |
 | `REFRESH_FAILURE_COOLDOWN_SECONDS` | no     | Wait after a failed refresh, `300` by default                  |
 | `STOCKFISH_PATH`                 | no       | Stockfish executable; empty = search `PATH`                    |
+| `STATIC_DIR`                     | no       | Built frontend directory; empty = API only (dev mode)          |
 | `ANALYSIS_DEPTH`                 | no       | Fixed search depth, `12` by default (6–30)                     |
 | `ANALYSIS_THREADS` / `ANALYSIS_HASH_MB` | no | Engine threads (`1`) and hash size (`64`)                    |
 | `ANALYSIS_JOB_MAX_ATTEMPTS`      | no       | Claims before a failing job stays failed, `3` by default       |
@@ -247,6 +251,46 @@ with contact information, as Chess.com recommends, for example
   `data_status` (`fresh`, `partial`, `stale`) and `last_successful_update`.
 - Engine-based metrics (accuracy, blunders, estimated Elo) are **not** part of the MVP.
 
+## Containerization and deployment
+
+One Dockerfile builds the frontend and serves it plus the API from a single image:
+
+```bash
+docker build -t chesspulse/app .
+docker compose up -d --build --wait   # app + worker + db (PostgreSQL 16)
+curl http://localhost:8000/health     # app serves the SPA and the API on :8000
+```
+
+- `DATABASE_URL` in the container points at the `db` service; migrations
+  (`alembic upgrade head`) run in the app entrypoint, so the schema is always
+  current. `app_worker` runs Stockfish from the Debian package built into the
+  image (`STOCKFISH_PATH=/usr/games/stockfish`).
+
+Deployment targets:
+
+- **CI/CD**: `.github/workflows/ci.yml` — backend (ruff, mypy, pytest on a
+  Postgres service), frontend (lint, typecheck, Vitest, build), Playwright e2e
+  against the composed stack, then build + push to GHCR and redeploy via a
+  deploy hook on every pushed commit.
+- **PaaS**: `render.yaml` blueprint (see its notes about the paid database
+  plan) or any Docker-Compose capable host.
+- **AWS**: `infra/cloudformation.yml` provisions one free-tier `t3.micro` EC2
+  instance with Docker and starts the whole compose stack; details and free-tier
+  guardrails: `infra/README.md`.
+
+E2E tests (Playwright, per feature, in `frontend/e2e/`; GitHub issues tagged
+`e2e-test`): with the compose stack running,
+
+```bash
+cd frontend
+npx playwright install --with-deps chromium   # once
+npx playwright test                           # E2E_BASE_URL defaults to http://127.0.0.1:8000
+```
+
+SQLite → PostgreSQL migration: the application was written directly for
+PostgreSQL (Compose) with Alembic migrations; there are no SQLite-specific code
+paths to migrate.
+
 ## Deployment assumptions
 
 - One FastAPI process (or several) behind a reverse proxy, PostgreSQL 16, the built
@@ -254,8 +298,6 @@ with contact information, as Chess.com recommends, for example
   from an origin listed in `CORS_ORIGINS`.
 - Outbound HTTPS to `api.chess.com` is required; set `CHESS_COM_USER_AGENT` with contact
   information. Run `alembic upgrade head` before starting a new version.
-- Docker Compose in this repository is for local PostgreSQL only; a production
-  deployment target has not been chosen (spec §20).
 
 ## Troubleshooting
 

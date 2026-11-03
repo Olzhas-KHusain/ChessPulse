@@ -1,0 +1,15 @@
+# Build context = repository root. Keep images small and builds fast.
+.git
+.venv
+backend/.venv
+backend/.mypy_cache
+backend/.pytest_cache
+backend/.ruff_cache
+backend/chesspulse_backend.egg-info
+backend/migrations/versions/__pycache__
+frontend/dist
+frontend/node_modules
+docs
+cache
+*.md
+.env

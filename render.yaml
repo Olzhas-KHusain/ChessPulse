@@ -1,0 +1,34 @@
+# Render blueprint (PaaS deploy). Docs: https://render.com/docs/blueprint-spec
+# The app image is built from the repository Dockerfile (static frontend +
+# FastAPI). ChessPulse's PostgreSQL database requirements are minimal, but
+# Render's free PostgreSQL plan no longer exists, so check pricing before
+# creating the database (the least expensive tier is a paid feature).
+
+services:
+  - type: web
+    name: chesspulse-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: chesspulse-db
+          property: connectionString
+      - key: POSTGRES_USER
+        value: chesspulse
+      # Render's managed PostgreSQL already includes pgvector-era extensions in
+      # its image; Stockfish is not available there, so engine analysis needs
+      # the VM-based deploy (infra/cloudformation.yml) or a custom image.
+      - key: STOCKFISH_PATH
+        value: /usr/games/stockfish
+
+databases:
+  - name: chesspulse-db
+    databaseName: chesspulse
+    user: chesspulse
+    plan: basic-256mb   # NOTE: paid on Render; free tier deployments use the compose stack on EC2 instead

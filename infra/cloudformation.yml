@@ -1,0 +1,91 @@
+# AWS CloudFormation: ChessPulse on a single free-tier EC2 instance.
+#
+# Free tier notes (do NOT enable paid features):
+# - t3.micro is covered 750 h/month for 12 months after signup (t2.micro in
+#   regions without t3 free tier); one instance stays within the quota.
+# - 30 GB gp3 (EBS) is the free-tier storage allowance.
+# - No load balancer, no NAT gateway, no RDS: a single instance runs the whole
+#   `docker compose` stack (app + worker + postgres) behind Docker's port
+#   mapping.
+#
+# Deploy:
+#   aws cloudformation deploy \
+#     --template-file infra/cloudformation.yml \
+#     --stack-name chesspulse \
+#     --parameter-overrides(KeyName=<your-ec2-key-pair>) \
+#     --capabilities CAPABILITY_IAM
+#
+# The instance installs Docker, clones this repository and starts the stack on
+# first boot. Then open http://<PublicIP>:8000/ health: /health.
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: ChessPulse full stack on one free-tier EC2 instance (t3.micro, Docker Compose)
+
+Parameters:
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Existing EC2 key pair for SSH access (optional-looking; required for administration).
+  AmiId:
+    Type: String
+    Default: ami-084568db438b7818   # Amazon Linux 2023, us-east-1 (verify for your region)
+    Description: Amazon Linux 2023 AMI for your region (keep the free-tier default).
+
+Resources:
+  ChessPulseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ChessPulse HTTP and SSH
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          CidrIp: 0.0.0.0/0
+
+  ChessPulseInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: t3.micro   # free tier; change only if you accept charges
+      KeyName: !Ref KeyName
+      SecurityGroupIds: [!Ref ChessPulseSecurityGroup]
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 30        # free tier allowance
+            VolumeType: gp3
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: chesspulse
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+          dnf update -y
+          dnf install -y docker git
+          systemctl enable --now docker
+          usermod -aG docker ec2-user
+          # Docker Engine Compose plugin (Amazon Linux 2023 ships docker-compose-plugin)
+          dnf install -y docker-compose-plugin || true
+          git clone --depth 1 https://github.com/Olzhas-KHusain/ChessPulse.git /opt/chesspulse
+          cd /opt/chesspulse
+          cat > .env <<'EOF'
+          POSTGRES_USER=chesspulse
+          POSTGRES_PASSWORD=change-me-before-production
+          POSTGRES_DB=chesspulse
+          APP_PORT=8000
+          # No reverse proxy here (free tier, one box): serve the app directly.
+          APP_BIND=0.0.0.0
+          EOF
+          docker compose up -d --build --wait
+        # The stack binds 127.0.0.1 in the repo compose file; production hosts
+        # must remove that binding (or use a reverse proxy) to expose port 8000.
+
+Outputs:
+  PublicIp:
+    Description: ChessPulse public address (app on :8000)
+    Value: !GetAtt ChessPulseInstance.PublicIp

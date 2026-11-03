@@ -71,6 +71,12 @@ class Settings(BaseSettings):
     # --- Engine analysis --------------------------------------------------------
     # Absolute path to a Stockfish binary. Empty means "look for `stockfish` on PATH".
     stockfish_path: str = ""
+
+    # --- Static frontend ---------------------------------------------------------
+    # Directory with the built frontend (Vite dist). Empty means "API only" (local
+    # development where Vite runs its own dev server); the Docker image sets it to
+    # serve the UI from the same process and port as the API.
+    static_dir: str = ""
     # Fixed-depth profile. Depth 12 is fast enough for a background worker and
     # deep enough to separate ordinary inaccuracies from real blunders.
     analysis_depth: int = Field(default=12, ge=6, le=30)
