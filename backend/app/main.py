@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from app import __version__
 from app.api.v1.errors import register_api_error_handlers
 from app.api.v1.routers import health, players
-from app.core.config import Settings, get_settings
+from app.core.config import ConfigurationError, Settings, get_settings
 from app.core.errors import register_error_handlers
 from app.core.logging import configure_logging
 from app.db.session import build_engine, build_session_factory
