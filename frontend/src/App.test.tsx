@@ -328,7 +328,7 @@ describe('games', () => {
     expect(await screen.findByText('Accuracy and key moments')).toBeTruthy();
     expect(screen.getByText('84.0%')).toBeTruthy();
     expect(screen.getByText('90.0%')).toBeTruthy();
-    expect(screen.getByText('Nf3')).toBeTruthy();
+    expect(screen.getAllByText('Nf3').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/best was Bc4/)).toBeTruthy();
     expect(requestAnalysis).toHaveBeenCalledWith('example_player', 'live:1', expect.anything());
   });

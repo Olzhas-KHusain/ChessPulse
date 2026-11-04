@@ -35,9 +35,10 @@ const POLL_MS = 2500;
 /**
  * Engine review of one game.
  *
- * The panel asks the API for a cached result on mount, requests one on demand and
- * polls while a background worker is running. Accuracy numbers are engine-derived
- * only; the copy says "mean move accuracy" and never calls them an Elo estimate.
+ * The panel requests an analysis only when the user clicks "Analyze with
+ * Stockfish". A background worker evaluates every position, then reports
+ * accuracy, average centipawn loss and the moves that cost the most. Results are
+ * cached per game.
  */
 export function AnalysisPanel({
   api,
@@ -56,6 +57,20 @@ export function AnalysisPanel({
   const [error, setError] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
 
+  async function request() {
+    setRequesting(true);
+    setError(null);
+    try {
+      setState(await api.requestAnalysis(username, gameId, scope));
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : 'The analysis could not be requested.');
+    } finally {
+      setRequesting(false);
+    }
+  }
+
+  // Check whether a cached analysis already exists. This is a read-only lookup:
+  // a new job is only started when the user clicks "Analyze with Stockfish".
   useEffect(() => {
     const controller = new AbortController();
     setState(null);
@@ -80,18 +95,6 @@ export function AnalysisPanel({
     return () => clearInterval(timer);
   }, [api, username, gameId, scope, state?.status]);
 
-  async function request() {
-    setRequesting(true);
-    setError(null);
-    try {
-      setState(await api.requestAnalysis(username, gameId, scope));
-    } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'The analysis could not be requested.');
-    } finally {
-      setRequesting(false);
-    }
-  }
-
   if (error !== null) {
     return (
       <Panel className="p-4 sm:p-5">
@@ -108,16 +111,7 @@ export function AnalysisPanel({
     );
   }
 
-  if (state === null) {
-    return (
-      <Panel className="p-4 sm:p-5">
-        <Eyebrow>Engine review</Eyebrow>
-        <p className="mt-2 text-sm text-chalk-400">Checking for an existing analysis…</p>
-      </Panel>
-    );
-  }
-
-  if (state.status === 'missing' || state.status === 'failed') {
+  if (state === null || state.status === 'missing' || state.status === 'failed') {
     return (
       <Panel className="p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -126,10 +120,18 @@ export function AnalysisPanel({
             <h3 className="mt-1 font-display text-xl tracking-tight text-chalk-50">
               Stockfish, move by move
             </h3>
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-chalk-400">
-              A background worker evaluates every position, then reports accuracy, average centipawn
-              loss and the moves that cost the most. It runs once per game and is cached.
-            </p>
+            {state === null ? (
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-chalk-400">
+                The engine has not reviewed this game yet. Start the review to see accuracy,
+                centipawn loss and the key moments of the game.
+              </p>
+            ) : (
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-chalk-400">
+                A background worker evaluates every position, then reports accuracy, average
+                centipawn loss and the moves that cost the most. It runs once per game and is
+                cached.
+              </p>
+            )}
           </div>
           <button
             type="button"
@@ -140,7 +142,7 @@ export function AnalysisPanel({
             {requesting ? 'Requesting…' : 'Analyze with Stockfish'}
           </button>
         </div>
-        {state.status === 'failed' && (
+        {state !== null && state.status === 'failed' && (
           <p className="mt-3 rounded-xl border border-coral-400/25 bg-coral-400/10 p-3 text-sm text-coral-200">
             {FAILURE_MESSAGE[state.error_code ?? ''] ??
               `The analysis failed (${state.error_code ?? 'unknown error'}).`}

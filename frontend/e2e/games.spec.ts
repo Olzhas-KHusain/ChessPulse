@@ -39,6 +39,6 @@ test('games list, pagination and details', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /vs|against|Game i/i })).toBeVisible({
     timeout: 30_000,
   });
-  await page.getByRole('button', { name: /Back/i }).click();
+  await page.getByRole('button', { name: /Back to games/ }).click();
   await expect(page.getByRole('button', { name: firstOpponent })).toBeVisible({ timeout: 30_000 });
 });

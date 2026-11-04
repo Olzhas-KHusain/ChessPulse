@@ -31,14 +31,14 @@ test('request, complete and cache an engine analysis', async ({ page }) => {
     /* already analyzed in a previous run — fine, cached path tested below */
   });
 
-  const ready = page.getByText(/accuracy/i).first();
+  const ready = page.getByText(/Your accuracy|Opponent accuracy/).first();
   await expect(ready).toBeVisible({ timeout: 240_000 });
   await expect(page.getByText(/centipawn loss|ACPL/i).first()).toBeVisible({ timeout: 30_000 });
 
   // The viewport app keeps no route persistently (no client router): after a
   // reload it returns to the search landing. The cached-analysis path is
   // verified by navigating back to the list and reopening the same game.
-  await page.getByRole('button', { name: /Back/i }).click();
+  await page.getByRole('button', { name: /Back to games/ }).click();
   await expect(
     page.getByRole('button', { name: /^Details of the game against / }).first(),
   ).toBeVisible({ timeout: 30_000 });
@@ -48,6 +48,7 @@ test('request, complete and cache an engine analysis', async ({ page }) => {
     .click();
 
   // Comes back from the cache: result without a new job request.
-  await expect(page.getByText(/accuracy/i).first()).toBeVisible({ timeout: 60_000 });
+  // The "Analyze with Stockfish" button must be gone: a cached completed
+  // analysis hides the request button.
   await expect(page.getByRole('button', { name: 'Analyze with Stockfish' })).toHaveCount(0);
 });

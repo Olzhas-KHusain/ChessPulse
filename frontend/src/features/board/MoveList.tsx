@@ -17,11 +17,22 @@ export interface PlayedMove {
 interface MoveListProps {
   moves: PlayedMove[];
   busy: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
   analysisEnabled: boolean;
   onUndo: () => void;
+  onRedo: () => void;
 }
 
-export function MoveList({ moves, busy, analysisEnabled, onUndo }: MoveListProps) {
+export function MoveList({
+  moves,
+  busy,
+  canUndo,
+  canRedo,
+  analysisEnabled,
+  onUndo,
+  onRedo,
+}: MoveListProps) {
   return (
     <Panel className="p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
@@ -32,10 +43,18 @@ export function MoveList({ moves, busy, analysisEnabled, onUndo }: MoveListProps
         <button
           type="button"
           onClick={onUndo}
-          disabled={busy || moves.length === 0}
+          disabled={busy || !canUndo}
           className="rounded-lg border border-white/10 bg-board-900/60 px-3 py-1.5 text-xs font-medium text-chalk-300 transition hover:border-white/20 hover:text-chalk-50 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Undo
+        </button>
+        <button
+          type="button"
+          onClick={onRedo}
+          disabled={busy || !canRedo}
+          className="rounded-lg border border-white/10 bg-board-900/60 px-3 py-1.5 text-xs font-medium text-chalk-300 transition hover:border-white/20 hover:text-chalk-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Redo
         </button>
       </div>
 

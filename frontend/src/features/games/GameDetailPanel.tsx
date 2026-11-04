@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { DataStatusBanner, Section } from '../../components/StateViews';
 import { Badge, Eyebrow, Panel } from '../../components/ui';
 import { AnalysisPanel } from '../analysis/AnalysisPanel';
+import { GameBoard } from './GameBoard';
 import { useApi } from '../../hooks/useApi';
 import type { ChesspulseApi } from '../../services/chesspulseApi';
 import type { Scope } from '../../types/api';
@@ -74,6 +75,19 @@ export function GameDetailPanel({
 
               <DataStatusBanner meta={meta} />
 
+              {pgn.status === 'available' && pgn.moves_san ? (
+                <GameBoard sanMoves={pgn.moves_san} />
+              ) : (
+                <Panel className="p-4 sm:p-5">
+                  <h3 className="text-sm font-medium text-chalk-100">Board</h3>
+                  <p className="mt-2 rounded-xl border border-dashed border-white/15 bg-board-900/40 p-3 text-sm text-chalk-400">
+                    {pgn.status === 'missing'
+                      ? 'Moves are not available for this game.'
+                      : `The moves of this game could not be read (${pgn.error ?? 'unknown error'}).`}
+                  </p>
+                </Panel>
+              )}
+
               <div className="grid gap-3 lg:grid-cols-[0.85fr_1.15fr]">
                 <Panel className="p-4 sm:p-5">
                   <h3 className="text-sm font-medium text-chalk-100">Game facts</h3>
@@ -121,13 +135,13 @@ export function GameDetailPanel({
                 <Panel className="p-4 sm:p-5">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="text-sm font-medium text-chalk-100">Moves</h3>
-                    {pgn.status === 'available' && moves.length > 0 && (
+                    {moves.length > 0 && (
                       <span className="text-xs tabular-nums text-chalk-500">
                         {Math.ceil(moves.length / 2)} moves
                       </span>
                     )}
                   </div>
-                  {pgn.status === 'available' && pgn.moves_san ? (
+                  {moves.length > 0 ? (
                     <ol className="mt-3 grid gap-x-6 gap-y-0.5 font-mono text-sm sm:grid-cols-2">
                       {moves.map((san, i) => {
                         if (i % 2 !== 0) return null;
@@ -147,9 +161,7 @@ export function GameDetailPanel({
                     </ol>
                   ) : (
                     <p className="mt-3 rounded-xl border border-dashed border-white/15 bg-board-900/40 p-3 text-sm text-chalk-400">
-                      {pgn.status === 'missing'
-                        ? 'Moves are not available for this game.'
-                        : `The moves of this game could not be read (${pgn.error ?? 'unknown error'}).`}
+                      The moves of this game could not be read.
                     </p>
                   )}
                 </Panel>

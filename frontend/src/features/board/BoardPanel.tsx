@@ -27,6 +27,13 @@ interface BoardPanelProps {
 
 const DEFAULT_TOOL: EditorTool = { color: 'w', type: 'p' };
 
+/** Snapshot of the board state used for undo / redo. */
+interface BoardSnapshot {
+  fen: string;
+  moves: PlayedMove[];
+  evaluation: BoardEvaluation | null;
+}
+
 function moveUci(fen: string, from: Square, to: Square): string | null {
   try {
     const chess = new Chess(fen);
@@ -58,7 +65,8 @@ export function BoardPanel({ api }: BoardPanelProps) {
   const [analysisEnabled, setAnalysisEnabled] = useState(true);
   const [evaluation, setEvaluation] = useState<BoardEvaluation | null>(null);
   const [moves, setMoves] = useState<PlayedMove[]>([]);
-  const [history, setHistory] = useState<string[]>([]);
+  const [history, setHistory] = useState<BoardSnapshot[]>([]);
+  const [future, setFuture] = useState<BoardSnapshot[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
@@ -80,6 +88,7 @@ export function BoardPanel({ api }: BoardPanelProps) {
     setEvaluation(null);
     setMoves([]);
     setHistory([]);
+    setFuture([]);
     setLastMove(null);
     setSelected(null);
     setTargets([]);
@@ -143,6 +152,9 @@ export function BoardPanel({ api }: BoardPanelProps) {
 
   async function analyzeMove(uci: string, from: Square, to: Square) {
     const fenBefore = fen;
+    const snapshot: BoardSnapshot = { fen: fenBefore, moves: [...moves], evaluation };
+    setHistory((current) => [...current, snapshot]);
+    setFuture([]);
     setBusy(true);
     setError(null);
     setHint(null);
@@ -162,7 +174,6 @@ export function BoardPanel({ api }: BoardPanelProps) {
           analysis: result,
         },
       ]);
-      setHistory((current) => [...current, fenBefore]);
       setEvaluation({
         fen: result.fen_after,
         turn: result.turn === 'white' ? 'black' : 'white',
@@ -202,6 +213,9 @@ export function BoardPanel({ api }: BoardPanelProps) {
     if (move === null) return;
     const fenAfter = chess.fen();
     const moveNumber = Number.parseInt(fenBefore.split(' ')[5] ?? '1', 10);
+    const snapshot: BoardSnapshot = { fen: fenBefore, moves: [...moves], evaluation };
+    setHistory((current) => [...current, snapshot]);
+    setFuture([]);
     setPosition(positionFromFen(fenAfter));
     setMoves((current) => [
       ...current,
@@ -215,7 +229,6 @@ export function BoardPanel({ api }: BoardPanelProps) {
         analysis: null,
       },
     ]);
-    setHistory((current) => [...current, fenBefore]);
     setEvaluation(null);
     setLastMove({ from, to });
     setSelected(null);
@@ -291,37 +304,45 @@ export function BoardPanel({ api }: BoardPanelProps) {
   }
 
   function undo() {
-    if (busy || history.length === 0 || moves.length === 0) return;
-    const previousFen = history[history.length - 1];
-    if (previousFen === undefined) return;
+    if (busy || history.length === 0) return;
+    const previous = history[history.length - 1];
+    if (previous === undefined) return;
+    setFuture((current) => [...current, { fen, moves: [...moves], evaluation }]);
+    setHistory((current) => current.slice(0, -1));
     try {
-      setPosition(positionFromFen(previousFen));
+      setPosition(positionFromFen(previous.fen));
     } catch {
       return;
     }
-    const remaining = moves.slice(0, -1);
-    const last = remaining[remaining.length - 1];
-    setHistory((current) => current.slice(0, -1));
-    setMoves(remaining);
+    setMoves(previous.moves);
+    setEvaluation(previous.evaluation);
     setLastMove(null);
     setSelected(null);
     setTargets([]);
     setError(null);
-    const analysis = last?.analysis;
-    setEvaluation(
-      !analysisEnabled || analysis == null
-        ? null
-        : {
-            fen: previousFen,
-            turn: analysis.turn === 'white' ? 'black' : 'white',
-            status: analysis.status_after,
-            eval_cp: analysis.eval_after_cp,
-            mate: analysis.mate_after,
-            best_move_uci: analysis.best_move_after_uci,
-            best_move_san: analysis.best_move_after_san,
-            engine: analysis.engine,
-          },
-    );
+    setHint(null);
+    setNotice(null);
+  }
+
+  function redo() {
+    if (busy || future.length === 0) return;
+    const next = future[future.length - 1];
+    if (next === undefined) return;
+    setHistory((current) => [...current, { fen, moves: [...moves], evaluation }]);
+    setFuture((current) => current.slice(0, -1));
+    try {
+      setPosition(positionFromFen(next.fen));
+    } catch {
+      return;
+    }
+    setMoves(next.moves);
+    setEvaluation(next.evaluation);
+    setLastMove(null);
+    setSelected(null);
+    setTargets([]);
+    setError(null);
+    setHint(null);
+    setNotice(null);
   }
 
   function playBest() {
@@ -547,7 +568,15 @@ export function BoardPanel({ api }: BoardPanelProps) {
               </p>
             </Panel>
           )}
-          <MoveList moves={moves} busy={busy} analysisEnabled={analysisEnabled} onUndo={undo} />
+          <MoveList
+            moves={moves}
+            busy={busy}
+            canUndo={history.length > 0}
+            canRedo={future.length > 0}
+            analysisEnabled={analysisEnabled}
+            onUndo={undo}
+            onRedo={redo}
+          />
         </div>
       </div>
     </section>

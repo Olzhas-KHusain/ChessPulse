@@ -34,6 +34,11 @@ test('evaluate a position, play a move and edit the board', async ({ page }) => 
   await page.getByRole('button', { name: 'Undo' }).click();
   await expect(page.getByLabel('Position FEN')).toHaveValue(/8\/8\/8\/8\/PPPPPPPP/);
 
+  // Redo brings the move back.
+  await page.getByRole('button', { name: 'Redo' }).click();
+  await expect(page.getByLabel('Position FEN')).toHaveValue(/4P3/);
+  await expect(page.getByText('Best', { exact: true })).toBeVisible();
+
   // Build a position from scratch: only a white king is invalid, both kings are fine.
   await page.getByRole('button', { name: 'Clear board' }).click();
   await expect(page.getByText('Editing', { exact: true })).toBeVisible();
