@@ -1,10 +1,12 @@
 # MVP Release Checklist
 
-Date: 2026-10-29 · Scope: Issues 1–10 plus opt-in Stockfish analysis · Verdict:
-**releasable for local use** — every automated check, the Docker database, the migrations,
-the live Chess.com contract and a real engine analysis have been executed (§1, §3).
-Non-blocking gaps: no production deployment target and no CI yet (see
-`docs/KNOWN_LIMITATIONS.md`).
+Date: 2026-11-05 · Scope: Issues 1–10, opt-in Stockfish analysis, time-class scaling, the
+free analysis board, the light theme, Docker/Compose, CI/CD and IaC · Verdict:
+**releasable for local and container use** — every automated check, the Docker database,
+the migrations, the live Chess.com contract, a real engine analysis and the composed
+stack with Playwright e2e have been executed (§1, §3, §9). Non-blocking gap: no live
+cloud deployment yet, because no provider credentials are available in the build
+environment (see `docs/KNOWN_LIMITATIONS.md`).
 
 ## 1. Executed checks (Windows, 2026-10-29)
 
@@ -150,12 +152,13 @@ analytics.
 1. Set `CHESS_COM_USER_AGENT` with real contact information.
 2. Compare `backend/tests/providers/fixtures/` field by field with one real response per
    endpoint (the live contract is confirmed, the fixtures are still synthetic).
-3. Add CI (GitHub Actions) running the backend and frontend checks.
-4. Choose a deployment target and serve the built frontend from the same origin
-   (`VITE_API_BASE_URL` empty) or an origin listed in `CORS_ORIGINS`.
-5. Consider code-splitting the frontend bundle (Recharts accounts for most of the
-   657.65 kB single chunk).
-6. Install Stockfish on the deployment host (or set `STOCKFISH_PATH`), run at least one
+3. Create the live deployment: CI already builds and pushes the image and can call a
+   deploy hook (`.github/workflows/ci.yml`, `render.yaml`, `infra/cloudformation.yml`).
+   Serve the frontend from the same origin (`VITE_API_BASE_URL` empty) or an origin
+   listed in `CORS_ORIGINS`.
+4. Consider code-splitting the frontend bundle (Recharts accounts for most of the
+   717.23 kB single chunk).
+5. Install Stockfish on the deployment host (or set `STOCKFISH_PATH`), run at least one
    `python -m app.worker` process, and monitor the queue; without a worker, analyses stay
    `queued` forever.
 
@@ -187,6 +190,12 @@ Node 24.22.0, PostgreSQL 16.9 in Docker Compose on port 55432, Docker 29.9.1.
 | Playwright e2e (7 specs) | `npx playwright test` | ✅ **7 passed**: search, tabs, games, analysis, form, board, theme |
 | Free board against real Stockfish | `BoardAnalysisService.evaluate/analyze_move` | ✅ start `+0.32`, `e2e4` classified `best`, best reply `c5` |
 
+CI (`.github/workflows/ci.yml`) is green on `611f7ad` for both the push and the pull
+request runs: backend `ruff` + `mypy` + `pytest`, frontend lint/typecheck/unit/build,
+Playwright e2e against the composed stack, and the GHCR image build and push all pass.
+The only skipped job in the pull-request run is the deploy step, which runs on pushes.
+
 Known gaps at this date: no live cloud deployment yet (no provider credentials in the
-build environment); AWS phone verification is still pending on the user side. CI and the
-GHCR image build are already green on the deploy commit.
+build environment); AWS phone verification is still pending on the user side. GitHub
+issues for the board and theme work are not created yet, and `#12`–`#15` still need the
+`e2e-test` label; both require repository write access that this environment lacks.
