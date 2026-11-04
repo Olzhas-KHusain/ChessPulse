@@ -14,16 +14,18 @@ function stubFetch(response: Response | Error) {
 }
 
 describe('chesspulseApi', () => {
+  const scope = { timeClass: 'rapid' as const, days: 30 };
+
   it('builds encoded URLs with query parameters and skips empty values', async () => {
     const fetchMock = stubFetch(new Response(JSON.stringify({ items: [] }), { status: 200 }));
-    await chesspulseApi.games('a_b', { cursor: null, result: 'win', limit: 5 });
+    await chesspulseApi.games('a_b', { cursor: null, result: 'win', limit: 5, scope });
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v1/players/a_b/games?result=win&limit=5',
+      '/api/v1/players/a_b/games?result=win&limit=5&time_class=rapid&days=30',
       expect.objectContaining({ headers: { Accept: 'application/json' } }),
     );
-    await chesspulseApi.game('a_b', 'live:1');
+    await chesspulseApi.game('a_b', 'live:1', scope);
     expect(fetchMock).toHaveBeenLastCalledWith(
-      '/api/v1/players/a_b/games/live%3A1',
+      '/api/v1/players/a_b/games/live%3A1?time_class=rapid&days=30',
       expect.anything(),
     );
   });
@@ -37,7 +39,7 @@ describe('chesspulseApi', () => {
         { status: 503, headers: { 'Retry-After': '120' } },
       ),
     );
-    const error = await chesspulseApi.overview('x').catch((e: unknown) => e);
+    const error = await chesspulseApi.overview('x', scope).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
     expect(error).toMatchObject({
       status: 503,
@@ -48,9 +50,11 @@ describe('chesspulseApi', () => {
 
   it('reports network failures and non-JSON errors', async () => {
     stubFetch(new TypeError('Failed to fetch'));
-    await expect(chesspulseApi.overview('x')).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
+    await expect(chesspulseApi.overview('x', scope)).rejects.toMatchObject({
+      code: 'NETWORK_ERROR',
+    });
     stubFetch(new Response('<html>', { status: 500 }));
-    await expect(chesspulseApi.overview('x')).rejects.toMatchObject({
+    await expect(chesspulseApi.overview('x', scope)).rejects.toMatchObject({
       status: 500,
       code: 'UNEXPECTED_ERROR',
     });

@@ -19,6 +19,9 @@ htmlcov/
 node_modules/
 frontend/dist/
 frontend/coverage/
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
 *.tsbuildinfo
 
 # Editors and OS

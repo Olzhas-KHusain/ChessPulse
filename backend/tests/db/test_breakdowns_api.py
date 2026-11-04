@@ -166,6 +166,25 @@ def test_partial_dataset_is_reported(client: Client) -> None:
     assert history["refresh_error"] == "INGESTION_INCOMPLETE"
 
 
+def test_scope_selects_time_class_and_period(client: Client) -> None:
+    c = client(_provider())
+
+    blitz = c.get(f"{BASE}/openings", params={"time_class": "blitz"}).json()
+    assert blitz["time_class"] == "blitz"
+    assert blitz["total_groups"] == 1
+    assert blitz["items"][0]["name"] == "Unknown"
+    assert blitz["items"][0]["games_count"] == 1
+
+    wide = c.get(f"{BASE}/rating-history", params={"days": 90}).json()
+    assert wide["time_class"] == "rapid"
+    assert wide["games_considered"] == 5  # the 40-day-old Rapid game is now included
+    assert wide["period"]["start"] == "2026-07-22T12:00:00Z"
+
+    everything = c.get(f"{BASE}/opponents", params={"time_class": "all", "days": 90}).json()
+    assert everything["time_class"] == "all"
+    assert everything["total_groups"] == 5  # alpha, alpha-1, beta, gamma, delta
+
+
 def test_unknown_player_is_404(client: Client) -> None:
     provider = FakeProvider(profile_error=ProviderError(ProviderErrorCode.PLAYER_NOT_FOUND, "x"))
     assert client(provider).get(f"{BASE}/openings").status_code == 404

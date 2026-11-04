@@ -20,8 +20,8 @@ GET  /analysis ──> cached payload or current job state
 ## Endpoints
 
 Both endpoints accept only a game that belongs to the player's eligible dataset (same
-rules as `api-games.md`: Rapid, standard chess, current 30-day window). An unknown or
-ineligible game → `404 GAME_NOT_FOUND`.
+scope and rules as `api-games.md`). An unknown or ineligible game →
+`404 GAME_NOT_FOUND`.
 
 ### `POST /api/v1/players/{username}/games/{game_id}/analysis`
 

@@ -7,13 +7,14 @@ Status: implemented (Issue 7). Code: `app/analytics/breakdowns.py` (pure),
 All three endpoints:
 
 - refresh or reuse the player's dataset through the cache policy (`cache-policy.md`);
-- read stored eligible games only (Rapid, standard chess, shared 30-day UTC window,
-  see `ingestion.md`) with one query per request;
+- read stored eligible games only (every standard time class, narrowed by the shared
+  `time_class` / `days` scope, see `api-overview.md` and `ingestion.md`) with one query
+  per request;
 - use the overview win-rate rule: `wins / (wins + losses + draws) * 100`, 2 decimals,
   `null` when the denominator is 0; `unknown_results` are counted in `games_count`
   but not in the rate;
 - return `data_status` (`fresh` / `partial` / `stale`), `refresh_error`, `as_of`,
-  `last_successful_update`, `period`;
+  `last_successful_update`, `period`, `time_class`;
 - use the error envelope and status codes of `api-overview.md`. Invalid query
   parameters → `400 INVALID_PARAMETER` (the message names the parameter, never echoes
   the value).
@@ -21,13 +22,14 @@ All three endpoints:
 ## `GET /api/v1/players/{username}/rating-history`
 
 Query: `from`, `to` — optional ISO 8601 timestamps **with time zone**. They narrow the
-shared window (`[max(from, start), min(to, end))`) and can never widen it; an empty
-result range → `400`.
+selected scope window (`[max(from, start), min(to, end))`) and can never widen it; an
+empty result range → `400`. The shared `time_class` / `days` parameters apply too.
 
 ```json
 {
   "username": "example_player",
   "period": { "start": "...", "end": "...", "timezone": "UTC" },
+  "time_class": "rapid",
   "points": [ { "timestamp": "2026-10-15T12:00:00Z", "rating": 1500, "source": "game_record", "game_id": 17 } ],
   "rating_semantics": "reported_with_game",
   "coverage": "partial",

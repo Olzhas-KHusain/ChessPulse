@@ -9,7 +9,13 @@ from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.orm import Session
 
 from app.analytics.breakdowns import GroupSort
-from app.api.v1.dependencies import get_now, get_provider, get_session, get_settings_dep
+from app.api.v1.dependencies import (
+    get_now,
+    get_provider,
+    get_scope,
+    get_session,
+    get_settings_dep,
+)
 from app.cache.service import PlayerDatasetCache
 from app.core.config import Settings
 from app.models import PlayerResult
@@ -24,6 +30,7 @@ from app.services.breakdowns import MAX_LIMIT, BreakdownService
 from app.services.form import FormService
 from app.services.games import DEFAULT_GAMES_LIMIT, MAX_GAMES_LIMIT, GamesService
 from app.services.overview import OverviewService
+from app.services.scope import Scope
 
 router = APIRouter(prefix="/api/v1/players", tags=["players"])
 
@@ -39,7 +46,7 @@ _ERRORS: dict[int | str, dict[str, object]] = {
     "/{username}/overview",
     response_model=OverviewResponse,
     responses=_ERRORS,
-    summary="30-day Rapid overview",
+    summary="Overview for the selected time class and period",
 )
 def get_overview(
     username: Username,
@@ -47,9 +54,10 @@ def get_overview(
     provider: Annotated[GameDataProvider, Depends(get_provider)],
     settings: Annotated[Settings, Depends(get_settings_dep)],
     now: Annotated[datetime, Depends(get_now)],
+    scope: Annotated[Scope, Depends(get_scope)],
 ) -> OverviewResponse:
     cache = PlayerDatasetCache(session, provider, settings)
-    return OverviewService(session, cache).get_overview(username, now)
+    return OverviewService(session, cache).get_overview(username, now, scope)
 
 
 Limit = Annotated[int, Query(description=f"Maximum groups returned (1-{MAX_LIMIT}).")]
@@ -67,7 +75,7 @@ def _service(session: Session, provider: GameDataProvider, settings: Settings) -
     "/{username}/rating-history",
     response_model=RatingHistoryResponse,
     responses=_ERRORS,
-    summary="Rapid rating observations from game records",
+    summary="Rating observations from game records",
 )
 def get_rating_history(
     username: Username,
@@ -75,10 +83,13 @@ def get_rating_history(
     provider: Annotated[GameDataProvider, Depends(get_provider)],
     settings: Annotated[Settings, Depends(get_settings_dep)],
     now: Annotated[datetime, Depends(get_now)],
+    scope: Annotated[Scope, Depends(get_scope)],
     from_: Annotated[datetime | None, Query(alias="from")] = None,
     to: Annotated[datetime | None, Query()] = None,
 ) -> RatingHistoryResponse:
-    return _service(session, provider, settings).rating_history(username, now, from_, to)
+    return _service(session, provider, settings).rating_history(
+        username, now, from_, to, scope=scope
+    )
 
 
 @router.get(
@@ -93,10 +104,11 @@ def get_openings(
     provider: Annotated[GameDataProvider, Depends(get_provider)],
     settings: Annotated[Settings, Depends(get_settings_dep)],
     now: Annotated[datetime, Depends(get_now)],
+    scope: Annotated[Scope, Depends(get_scope)],
     sort: Sort = GroupSort.GAMES,
     limit: Limit = 20,
 ) -> OpeningsResponse:
-    return _service(session, provider, settings).openings(username, now, sort, limit)
+    return _service(session, provider, settings).openings(username, now, sort, limit, scope=scope)
 
 
 @router.get(
@@ -111,10 +123,11 @@ def get_opponents(
     provider: Annotated[GameDataProvider, Depends(get_provider)],
     settings: Annotated[Settings, Depends(get_settings_dep)],
     now: Annotated[datetime, Depends(get_now)],
+    scope: Annotated[Scope, Depends(get_scope)],
     sort: Sort = GroupSort.GAMES,
     limit: Limit = 20,
 ) -> OpponentsResponse:
-    return _service(session, provider, settings).opponents(username, now, sort, limit)
+    return _service(session, provider, settings).opponents(username, now, sort, limit, scope=scope)
 
 
 @router.get(
@@ -129,6 +142,7 @@ def list_games(
     provider: Annotated[GameDataProvider, Depends(get_provider)],
     settings: Annotated[Settings, Depends(get_settings_dep)],
     now: Annotated[datetime, Depends(get_now)],
+    scope: Annotated[Scope, Depends(get_scope)],
     limit: Annotated[int, Query(description=f"Page size (1-{MAX_GAMES_LIMIT}).")] = (
         DEFAULT_GAMES_LIMIT
     ),
@@ -138,7 +152,7 @@ def list_games(
     ] = None,
 ) -> GameListResponse:
     service = GamesService(session, PlayerDatasetCache(session, provider, settings))
-    return service.list_games(username, now, limit=limit, cursor=cursor, result=result)
+    return service.list_games(username, now, limit=limit, cursor=cursor, result=result, scope=scope)
 
 
 @router.get(
@@ -154,9 +168,10 @@ def get_game(
     provider: Annotated[GameDataProvider, Depends(get_provider)],
     settings: Annotated[Settings, Depends(get_settings_dep)],
     now: Annotated[datetime, Depends(get_now)],
+    scope: Annotated[Scope, Depends(get_scope)],
 ) -> GameDetailResponse:
     service = GamesService(session, PlayerDatasetCache(session, provider, settings))
-    return service.get_game(username, game_id, now)
+    return service.get_game(username, game_id, now, scope=scope)
 
 
 def _analysis_service(
@@ -178,8 +193,11 @@ def get_game_analysis(
     provider: Annotated[GameDataProvider, Depends(get_provider)],
     settings: Annotated[Settings, Depends(get_settings_dep)],
     now: Annotated[datetime, Depends(get_now)],
+    scope: Annotated[Scope, Depends(get_scope)],
 ) -> AnalysisStateResponse:
-    return _analysis_service(session, provider, settings).get_state(username, game_id, now)
+    return _analysis_service(session, provider, settings).get_state(
+        username, game_id, now, scope=scope
+    )
 
 
 @router.post(
@@ -195,8 +213,11 @@ def request_game_analysis(
     provider: Annotated[GameDataProvider, Depends(get_provider)],
     settings: Annotated[Settings, Depends(get_settings_dep)],
     now: Annotated[datetime, Depends(get_now)],
+    scope: Annotated[Scope, Depends(get_scope)],
 ) -> AnalysisStateResponse:
-    return _analysis_service(session, provider, settings).request(username, game_id, now)
+    return _analysis_service(session, provider, settings).request(
+        username, game_id, now, scope=scope
+    )
 
 
 def _form_service(session: Session, provider: GameDataProvider, settings: Settings) -> FormService:
@@ -215,8 +236,9 @@ def get_form(
     provider: Annotated[GameDataProvider, Depends(get_provider)],
     settings: Annotated[Settings, Depends(get_settings_dep)],
     now: Annotated[datetime, Depends(get_now)],
+    scope: Annotated[Scope, Depends(get_scope)],
 ) -> FormReportResponse:
-    return _form_service(session, provider, settings).get_form(username, now)
+    return _form_service(session, provider, settings).get_form(username, now, scope=scope)
 
 
 @router.post(
@@ -231,5 +253,6 @@ def analyze_form(
     provider: Annotated[GameDataProvider, Depends(get_provider)],
     settings: Annotated[Settings, Depends(get_settings_dep)],
     now: Annotated[datetime, Depends(get_now)],
+    scope: Annotated[Scope, Depends(get_scope)],
 ) -> AnalyzeScopeResponse:
-    return _form_service(session, provider, settings).analyze_scope(username, now)
+    return _form_service(session, provider, settings).analyze_scope(username, now, scope=scope)

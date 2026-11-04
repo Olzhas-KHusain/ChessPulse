@@ -67,6 +67,10 @@ class Settings(BaseSettings):
     # Minimum wait after a failed refresh before the next attempt (Retry-After wins
     # when longer), so outages and rate limits are not hammered.
     refresh_failure_cooldown_seconds: int = Field(default=300, ge=0, le=24 * 3600)
+    # How many days of standard-chess games (all time classes) one ingestion keeps.
+    # Monthly archives are fetched per month in this window, so a larger value means
+    # more upstream requests per refresh.
+    dataset_window_days: int = Field(default=90, ge=30, le=730)
 
     # --- Engine analysis --------------------------------------------------------
     # Absolute path to a Stockfish binary. Empty means "look for `stockfish` on PATH".

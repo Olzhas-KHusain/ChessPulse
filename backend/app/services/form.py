@@ -17,7 +17,7 @@ from app.analytics.form import (
 from app.analytics.window import analysis_window
 from app.cache.service import PlayerDatasetCache
 from app.core.config import Settings
-from app.models import Player, TimeClass
+from app.models import Player
 from app.repositories import AnalysisRepository
 from app.schemas.form import (
     AnalyzeScopeResponse,
@@ -29,6 +29,7 @@ from app.schemas.form import (
 )
 from app.schemas.overview import Period
 from app.services.analysis import analysis_profile
+from app.services.scope import DEFAULT_SCOPE, Scope
 
 Color = Literal["white", "black"]
 Classification = Literal["best", "good", "inaccuracy", "mistake", "blunder"]
@@ -44,11 +45,11 @@ class FormService:
         self._analysis = AnalysisRepository(session)
 
     def get_form(
-        self, username: str, now: datetime, *, time_class: TimeClass = TimeClass.RAPID
+        self, username: str, now: datetime, *, scope: Scope = DEFAULT_SCOPE
     ) -> FormReportResponse:
         status = self._cache.ensure_dataset(username, now)
         player = self._session.get_one(Player, status.player_id)
-        window = analysis_window(now)
+        window = analysis_window(now, scope.days)
         profile = analysis_profile(self._settings)
 
         rows = self._analysis.list_analysed_games(
@@ -56,11 +57,14 @@ class FormService:
             profile_hash=profile,
             start=window.start,
             end=window.end,
-            time_class=time_class,
+            time_class=scope.time_class,
         )
         total = len(
             self._analysis.list_scope_game_ids(
-                status.player_id, start=window.start, end=window.end, time_class=time_class
+                status.player_id,
+                start=window.start,
+                end=window.end,
+                time_class=scope.time_class,
             )
         )
         counts = self._analysis.job_counts(
@@ -68,7 +72,7 @@ class FormService:
             profile_hash=profile,
             start=window.start,
             end=window.end,
-            time_class=time_class,
+            time_class=scope.time_class,
         )
         report = build_form_report(
             [
@@ -91,7 +95,7 @@ class FormService:
         return FormReportResponse(
             username=player.username,
             period=Period(start=window.start, end=window.end),
-            time_class=time_class.value,
+            time_class=scope.time_class_value,
             data_status=status.data_status.value,
             refresh_error=status.refresh_error,
             as_of=now,
@@ -126,16 +130,19 @@ class FormService:
         )
 
     def analyze_scope(
-        self, username: str, now: datetime, *, time_class: TimeClass = TimeClass.RAPID
+        self, username: str, now: datetime, *, scope: Scope = DEFAULT_SCOPE
     ) -> AnalyzeScopeResponse:
         """Queue every game in the scope that has no stored analysis yet."""
         status = self._cache.ensure_dataset(username, now)
         player = self._session.get_one(Player, status.player_id)
-        window = analysis_window(now)
+        window = analysis_window(now, scope.days)
         profile = analysis_profile(self._settings)
 
         game_ids = self._analysis.list_scope_game_ids(
-            status.player_id, start=window.start, end=window.end, time_class=time_class
+            status.player_id,
+            start=window.start,
+            end=window.end,
+            time_class=scope.time_class,
         )
         analysed = self._analysis.analysed_game_ids(game_ids, profile)
         missing = [game_id for game_id in game_ids if game_id not in analysed]
@@ -147,11 +154,11 @@ class FormService:
             profile_hash=profile,
             start=window.start,
             end=window.end,
-            time_class=time_class,
+            time_class=scope.time_class,
         )
         return AnalyzeScopeResponse(
             username=player.username,
-            time_class=time_class.value,
+            time_class=scope.time_class_value,
             games_total=len(game_ids),
             already_analyzed=len(analysed),
             queued=queued,

@@ -18,12 +18,20 @@ test('games list, pagination and details', async ({ page }) => {
   const firstOpponent = (await detailsButtons.first().getAttribute('aria-label')) ?? '';
 
   // Pagination: the next page shows different games (keyset cursor).
-  await page.getByRole('navigation', { name: 'Game list pages' }).getByRole('button').nth(1).click();
+  await page
+    .getByRole('navigation', { name: 'Game list pages' })
+    .getByRole('button')
+    .nth(1)
+    .click();
   await expect(detailsButtons.first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/Page \d+/)).toBeVisible();
 
   // Back to page 1 and open the details of the first game.
-  await page.getByRole('navigation', { name: 'Game list pages' }).getByRole('button').nth(0).click();
+  await page
+    .getByRole('navigation', { name: 'Game list pages' })
+    .getByRole('button')
+    .nth(0)
+    .click();
   await expect(detailsButtons.first()).toBeVisible({ timeout: 30_000 });
   await detailsButtons.first().click();
 

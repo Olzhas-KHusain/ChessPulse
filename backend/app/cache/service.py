@@ -66,6 +66,7 @@ class PlayerDatasetCache:
         self._provider = provider
         self._ttl = timedelta(seconds=settings.cache_ttl_seconds)
         self._cooldown = timedelta(seconds=settings.refresh_failure_cooldown_seconds)
+        self._window_days = settings.dataset_window_days
         self._ingestion_factory = ingestion_factory
         self._cache = CacheMetadataRepository(session)
 
@@ -111,7 +112,7 @@ class PlayerDatasetCache:
         self._session.commit()
         try:
             report = self._ingestion_factory(self._session, self._provider).ingest_player(
-                username, now
+                username, now, window_days=self._window_days
             )
         except ProviderError as error:
             retry_at = now + max(self._cooldown, timedelta(seconds=error.retry_after or 0))

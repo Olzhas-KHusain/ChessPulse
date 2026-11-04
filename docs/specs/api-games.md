@@ -3,10 +3,11 @@
 Status: implemented (Issue 8). Code: `app/services/games.py`, `app/analytics/pgn.py`,
 `app/api/v1/routers/players.py`, `app/schemas/games.py`.
 
-Both endpoints use the player's eligible dataset only (Rapid, standard chess, shared
-30-day UTC window; see `ingestion.md`), go through the cache policy, return
-`data_status` / `refresh_error` / `as_of` / `last_successful_update`, and use the
-error envelope from `api-overview.md`.
+Both endpoints use the player's eligible dataset only (every standard time class,
+narrowed by the shared `time_class` / `days` scope; see `api-overview.md` and
+`ingestion.md`), go through the cache policy, return `data_status` / `refresh_error` /
+`as_of` / `last_successful_update` / `time_class`, and use the error envelope from
+`api-overview.md`.
 
 ## Game identifier
 
@@ -24,6 +25,8 @@ Chess.com keeping the numeric id in game URLs; the URL path format itself may ch
 | `limit` | 1–100, default 20 |
 | `result` | optional: `win`, `loss`, `draw`, `unknown` (searched player's perspective) |
 | `cursor` | opaque `next_cursor` from the previous page |
+| `time_class` | shared scope parameter (`rapid` default; `all` combines classes) |
+| `days` | shared scope window (`7`–`365`, default `30`) |
 
 - Order: `played_at` descending, then internal game id descending (deterministic for
   equal timestamps).
@@ -40,8 +43,8 @@ those reported with the game (`rating_semantics: reported_with_game` in details)
 ## `GET /api/v1/players/{username}/games/{game_id}`
 
 Returns the game only if it belongs to **this** player's eligible dataset in the
-current window. A game of another player, a Blitz game, a game outside the window, or
-an unknown id → `404 GAME_NOT_FOUND`.
+selected scope. A game of another player, a game outside the window, or an unknown id
+→ `404 GAME_NOT_FOUND`.
 
 ```json
 {
@@ -73,6 +76,6 @@ Parsing is bounded (100 000 characters, 1 000 plies).
 ## Indexes
 
 The list query filters `player_games` by `player_id` (unique index
-`(player_id, game_id)`) and joins `games` by primary key; the 30-day window keeps the
+`(player_id, game_id)`) and joins `games` by primary key; the scope window keeps the
 row count small. No new index was added; revisit with `EXPLAIN` on production-sized
 data before adding a denormalized `(player_id, played_at)` index.

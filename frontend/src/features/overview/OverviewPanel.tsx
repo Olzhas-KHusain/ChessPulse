@@ -1,5 +1,5 @@
 import { Eyebrow, Panel } from '../../components/ui';
-import type { Overview } from '../../types/api';
+import type { Overview, Scope } from '../../types/api';
 import {
   formatDate,
   formatDateTime,
@@ -7,6 +7,7 @@ import {
   formatPercent,
   MISSING,
 } from '../../utils/format';
+import { periodLabel, timeClassLabel } from '../player/scope';
 
 function StatValue({ value }: { value: string }) {
   if (value !== MISSING) return <>{value}</>;
@@ -58,9 +59,10 @@ function streakText(overview: Overview): string {
   return `${streak.length} ${streak.length === 1 ? noun : plural}`;
 }
 
-export function OverviewPanel({ overview }: { overview: Overview }) {
+export function OverviewPanel({ overview, scope }: { overview: Overview; scope: Scope }) {
   const rating = overview.current_rating_detail;
   const hasGames = overview.games_count > 0;
+  const className = timeClassLabel(overview.time_class);
   const share = (count: number) =>
     overview.games_count > 0 ? `${(count / overview.games_count) * 100}%` : '0%';
 
@@ -73,17 +75,17 @@ export function OverviewPanel({ overview }: { overview: Overview }) {
             id="overview-heading"
             className="mt-1 font-display text-2xl tracking-tight text-chalk-50"
           >
-            Rapid, {formatDate(overview.period.start)} – {formatDate(overview.period.end)}
+            {className}, {formatDate(overview.period.start)} – {formatDate(overview.period.end)}
           </h2>
         </div>
         <span className="rounded-full border border-white/10 bg-board-900/60 px-3 py-1 text-[11px] text-chalk-400">
-          Last 30 days
+          {periodLabel(scope.days)}
         </span>
       </div>
 
       {overview.games_count === 0 && (
         <p className="rounded-2xl border border-dashed border-white/15 bg-board-900/40 p-4 text-sm text-chalk-300">
-          No eligible Rapid games in the last 30 days.
+          No eligible {className} games in the {periodLabel(scope.days).toLowerCase()}.
         </p>
       )}
 
@@ -96,7 +98,7 @@ export function OverviewPanel({ overview }: { overview: Overview }) {
           accent
         />
         <HeroStat
-          label="Current Rapid rating"
+          label={`Current ${className} rating`}
           value={formatNumber(overview.current_rating)}
           hint={rating ? `From Chess.com stats, ${formatDateTime(rating.as_of)}` : 'Not available'}
         />

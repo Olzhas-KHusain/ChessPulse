@@ -67,7 +67,7 @@ export function SearchForm({
         />
         <button
           type="submit"
-          className="shrink-0 rounded-xl bg-mint-400 px-4 py-2 text-sm font-semibold text-board-950 transition hover:bg-mint-300 sm:px-5"
+          className="shrink-0 rounded-xl bg-mint-400 px-4 py-2 text-sm font-semibold text-on-accent transition hover:bg-mint-300 sm:px-5"
         >
           Analyze
           <span aria-hidden="true" className="ml-1.5">

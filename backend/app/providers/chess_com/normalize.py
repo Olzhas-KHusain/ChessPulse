@@ -15,6 +15,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import unquote, urlsplit
@@ -273,28 +274,61 @@ def normalize_profile(payload: Mapping[str, Any], meta: ResponseMeta) -> Provide
 
 
 def normalize_stats(payload: Mapping[str, Any], meta: ResponseMeta) -> ProviderStats:
-    section = payload.get("chess_rapid")
-    if section is None:
-        return ProviderStats(
-            rapid_section_present=False, rapid_rating=None, rapid_rating_at=None, meta=meta
-        )
+    """Parse the four documented rating sections; each section fails independently."""
     issues: list[str] = []
-    last = section.get("last") if isinstance(section, dict) else None
+    rapid = _parse_stats_section(payload.get("chess_rapid"), "chess_rapid", issues)
+    blitz = _parse_stats_section(payload.get("chess_blitz"), "chess_blitz", issues)
+    bullet = _parse_stats_section(payload.get("chess_bullet"), "chess_bullet", issues)
+    daily = _parse_stats_section(payload.get("chess_daily"), "chess_daily", issues)
+    return ProviderStats(
+        rapid_section_present=rapid.present,
+        rapid_rating=rapid.rating,
+        rapid_rating_at=rapid.rated_at,
+        blitz_section_present=blitz.present,
+        blitz_rating=blitz.rating,
+        blitz_rating_at=blitz.rated_at,
+        bullet_section_present=bullet.present,
+        bullet_rating=bullet.rating,
+        bullet_rating_at=bullet.rated_at,
+        daily_section_present=daily.present,
+        daily_rating=daily.rating,
+        daily_rating_at=daily.rated_at,
+        meta=meta,
+        issues=tuple(issues),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _StatsSection:
+    present: bool = False
+    rating: int | None = None
+    rated_at: datetime | None = None
+    issues: list[str] = field(default_factory=list)
+
+
+def _parse_stats_section(section: object, name: str, issues: list[str]) -> _StatsSection:
+    """``None`` section means the player has never been rated in that class."""
+    if section is None:
+        return _StatsSection()
+    if not isinstance(section, dict):
+        issues.append(f"{name}_last_missing")
+        return _StatsSection(present=True)
+    section_issues: list[str] = []
+    last = section.get("last")
     if not isinstance(last, dict):
-        issues.append("chess_rapid_last_missing")
+        section_issues.append(f"{name}_last_missing")
         last = {}
     rating = _rating(last.get("rating"))
     if rating is None and last:
-        issues.append("chess_rapid_rating_invalid")
+        section_issues.append(f"{name}_rating_invalid")
     rated_at = epoch_to_utc(last.get("date"))
     if rated_at is None and last.get("date") is not None:
-        issues.append("chess_rapid_date_invalid")
-    return ProviderStats(
-        rapid_section_present=True,
-        rapid_rating=rating,
-        rapid_rating_at=rated_at if rating is not None else None,
-        meta=meta,
-        issues=tuple(issues),
+        section_issues.append(f"{name}_date_invalid")
+    issues.extend(section_issues)
+    return _StatsSection(
+        present=True,
+        rating=rating,
+        rated_at=rated_at if rating is not None else None,
     )
 
 

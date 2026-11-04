@@ -23,7 +23,8 @@ from app.schemas.games import (
     PgnOut,
 )
 from app.schemas.overview import Period
-from app.services.breakdowns import InvalidParameterError
+from app.services.errors import InvalidParameterError
+from app.services.scope import DEFAULT_SCOPE, Scope
 
 MAX_GAMES_LIMIT = 100
 DEFAULT_GAMES_LIMIT = 20
@@ -112,16 +113,18 @@ class GamesService:
         limit: int = DEFAULT_GAMES_LIMIT,
         cursor: str | None = None,
         result: PlayerResult | None = None,
+        scope: Scope = DEFAULT_SCOPE,
     ) -> GameListResponse:
         if not 1 <= limit <= MAX_GAMES_LIMIT:
             raise InvalidParameterError("limit", f"limit must be between 1 and {MAX_GAMES_LIMIT}")
         after = decode_cursor(cursor, result) if cursor else None
         status = self._cache.ensure_dataset(username, now)
-        window = analysis_window(now)
+        window = analysis_window(now, scope.days)
         rows = self._games.list_player_games(
             status.player_id,
             start=window.start,
             end=window.end,
+            time_class=scope.time_class,
             limit=limit + 1,  # one extra row tells whether another page exists
             after=after,
             result=result,
@@ -135,6 +138,7 @@ class GamesService:
         return GameListResponse(
             username=player.username,
             period=Period(start=window.start, end=window.end),
+            time_class=scope.time_class_value,
             result_filter=result.value if result else None,
             items=[_summary(r) for r in page],
             next_cursor=next_cursor,
@@ -144,13 +148,20 @@ class GamesService:
             last_successful_update=status.last_successful_update,
         )
 
-    def get_game(self, username: str, game_id: str, now: datetime) -> GameDetailResponse:
+    def get_game(
+        self, username: str, game_id: str, now: datetime, *, scope: Scope = DEFAULT_SCOPE
+    ) -> GameDetailResponse:
         if not 1 <= len(game_id) <= 128:
             raise GameNotFoundError(game_id)
         status = self._cache.ensure_dataset(username, now)
-        window = analysis_window(now)
+        window = analysis_window(now, scope.days)
         row = self._games.get_player_game(
-            status.player_id, Provider.CHESS_COM, game_id, start=window.start, end=window.end
+            status.player_id,
+            Provider.CHESS_COM,
+            game_id,
+            start=window.start,
+            end=window.end,
+            time_class=scope.time_class,
         )
         if row is None:
             raise GameNotFoundError(game_id)
@@ -158,6 +169,7 @@ class GamesService:
         player = self._session.get_one(Player, status.player_id)
         return GameDetailResponse(
             username=player.username,
+            time_class=scope.time_class_value,
             game=_summary(row),
             pgn=PgnOut(
                 status=details.status.value,

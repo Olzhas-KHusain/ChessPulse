@@ -30,6 +30,8 @@ function fakeApi(overrides: Partial<ChesspulseApi> = {}): ChesspulseApi {
     requestAnalysis: vi.fn().mockResolvedValue(fx.missingAnalysis),
     form: vi.fn().mockResolvedValue(fx.formReport),
     analyzeForm: vi.fn().mockResolvedValue(fx.analyzeScope),
+    boardEvaluate: vi.fn().mockResolvedValue(fx.boardEvaluation),
+    boardMove: vi.fn().mockResolvedValue(fx.boardMove),
     ...overrides,
   };
 }
@@ -54,7 +56,11 @@ describe('search', () => {
 
     expect(screen.getByRole('status').textContent).toContain('Loading');
     expect(await screen.findByRole('heading', { name: 'example_player' })).toBeTruthy();
-    expect(api.overview).toHaveBeenCalledWith('example_player', expect.anything());
+    expect(api.overview).toHaveBeenCalledWith(
+      'example_player',
+      expect.anything(),
+      expect.anything(),
+    );
     expect(metric('Games').textContent).toBe('42');
     expect(metric('Win rate').textContent).toBe('52.38%');
     expect(metric('Current Rapid rating').textContent).toBe('1,523');
@@ -200,7 +206,9 @@ describe('sections', () => {
     expect(screen.getByText('Qh5')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Analyze 1 remaining' }));
-    await waitFor(() => expect(analyzeForm).toHaveBeenCalledWith('example_player'));
+    await waitFor(() =>
+      expect(analyzeForm).toHaveBeenCalledWith('example_player', expect.anything()),
+    );
   });
 
   it('supports keyboard navigation between tabs', async () => {
@@ -211,6 +219,20 @@ describe('sections', () => {
     const formTab = screen.getByRole('tab', { name: 'Form report' });
     expect(formTab.getAttribute('aria-selected')).toBe('true');
     expect(document.activeElement).toBe(formTab);
+  });
+});
+
+describe('navigation', () => {
+  it('opens the free board and returns to the analytics search', () => {
+    render(<App api={fakeApi()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Free board' }));
+    expect(
+      screen.getByRole('heading', { name: 'Set up any position. Analyse every move.' }),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Analytics' }));
+    expect(screen.getByLabelText('Chess.com username')).toBeTruthy();
   });
 });
 
@@ -243,7 +265,12 @@ describe('games', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Details of the game against rival_3/ }));
     expect(await screen.findByText('1. e4 e5')).toBeTruthy();
-    expect(game).toHaveBeenCalledWith('example_player', 'live:3', expect.anything());
+    expect(game).toHaveBeenCalledWith(
+      'example_player',
+      'live:3',
+      expect.anything(),
+      expect.anything(),
+    );
 
     fireEvent.click(screen.getByRole('button', { name: '← Back to games' }));
     expect(await screen.findByText('vs rival_3')).toBeTruthy();
@@ -262,7 +289,9 @@ describe('games', () => {
         expect.anything(),
       ),
     );
-    expect(await screen.findByText('No games match this filter in the last 30 days.')).toBeTruthy();
+    expect(
+      await screen.findByText('No Rapid games match this filter in the last 30 days.'),
+    ).toBeTruthy();
   });
 
   it.each([
@@ -301,6 +330,6 @@ describe('games', () => {
     expect(screen.getByText('90.0%')).toBeTruthy();
     expect(screen.getByText('Nf3')).toBeTruthy();
     expect(screen.getByText(/best was Bc4/)).toBeTruthy();
-    expect(requestAnalysis).toHaveBeenCalledWith('example_player', 'live:1');
+    expect(requestAnalysis).toHaveBeenCalledWith('example_player', 'live:1', expect.anything());
   });
 });

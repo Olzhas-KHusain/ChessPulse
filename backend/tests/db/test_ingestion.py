@@ -51,7 +51,7 @@ def _ingest(session: Session, provider: FakeProvider):  # type: ignore[no-untype
     return GameIngestionService(session, provider).ingest_player(OWNER, NOW)
 
 
-def test_only_eligible_rapid_games_in_the_window_are_persisted(session: Session) -> None:
+def test_only_eligible_games_in_the_window_are_persisted(session: Session) -> None:
     provider = FakeProvider(
         months={
             AUG: [game(WINDOW.start - DAY, game_id="live:1")],  # month not fetched
@@ -71,12 +71,11 @@ def test_only_eligible_rapid_games_in_the_window_are_persisted(session: Session)
     report = _ingest(session, provider)
 
     assert "month:2026-08" not in provider.calls
-    assert sorted(_perspectives(session)) == ["live:3", "live:7"]
-    assert _count(session, Game) == 2
-    assert report.eligible_games == 2
+    assert sorted(_perspectives(session)) == ["live:3", "live:4", "live:7"]
+    assert _count(session, Game) == 3
+    assert report.eligible_games == 3
     assert report.excluded == {
         "outside_window": 2,
-        "not_rapid": 1,
         "non_standard_variant": 1,
         "rules_unverified": 1,
     }
@@ -192,6 +191,36 @@ def test_rating_and_opening_are_persisted(session: Session) -> None:
     stored = session.scalars(select(Opening)).one()
     assert (stored.source_opening_id, stored.eco_code) == ("Sicilian-Defense", "B20")
     assert session.scalars(select(Game.opening_id)).one() == stored.id
+
+
+def test_all_class_ratings_are_persisted(session: Session) -> None:
+    provider = FakeProvider(
+        rapid_rating=1523,
+        blitz_rating=1400,
+        bullet_rating=1300,
+        daily_rating=1200,
+        months={OCT: [game(WINDOW.start + DAY)]},
+    )
+    _ingest(session, provider)
+    owner = session.scalars(select(Player).where(Player.username == OWNER)).one()
+    assert (
+        owner.current_rapid_rating,
+        owner.current_blitz_rating,
+        owner.current_bullet_rating,
+        owner.current_daily_rating,
+    ) == (1523, 1400, 1300, 1200)
+    assert owner.current_blitz_rating_at == NOW
+
+
+def test_missing_class_section_keeps_the_stored_rating(session: Session) -> None:
+    _ingest(
+        session,
+        FakeProvider(blitz_rating=1400, months={OCT: [game(WINDOW.start + DAY)]}),
+    )
+    # The provider no longer returns a Blitz section: the stored value must survive.
+    _ingest(session, FakeProvider(months={OCT: [game(WINDOW.start + DAY)]}))
+    owner = session.scalars(select(Player).where(Player.username == OWNER)).one()
+    assert owner.current_blitz_rating == 1400
 
 
 def test_confirmed_rename_updates_the_existing_player(session: Session) -> None:

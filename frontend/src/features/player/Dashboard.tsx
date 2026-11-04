@@ -4,13 +4,15 @@ import { DataStatusBanner, Section } from '../../components/StateViews';
 import { Eyebrow, Panel } from '../../components/ui';
 import { useApi } from '../../hooks/useApi';
 import type { ChesspulseApi } from '../../services/chesspulseApi';
-import type { GroupSort, Overview } from '../../types/api';
+import type { GroupSort, Overview, Scope } from '../../types/api';
 import { formatDate, formatNumber } from '../../utils/format';
 import { GamesPanel } from '../games/GamesPanel';
 import { FormPanel } from '../form/FormPanel';
 import { OpeningsTable, OpponentsTable, SortSelect } from '../openings/GroupTables';
 import { OverviewPanel } from '../overview/OverviewPanel';
 import { RatingHistoryPanel } from '../rating-history/RatingHistoryPanel';
+import { ScopeSelect } from './ScopeSelect';
+import { DEFAULT_SCOPE, periodLabel, scopeKey, timeClassLabel } from './scope';
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -25,21 +27,36 @@ type TabId = (typeof TABS)[number]['id'];
 export function Dashboard({ api, username }: { api: ChesspulseApi; username: string }) {
   // The overview loads (and refreshes the cache) first; the other sections are
   // requested only after it succeeds, so they reuse the same refreshed dataset.
-  const overview = useApi(username, (signal) => api.overview(username, signal));
+  const [scope, setScope] = useState<Scope>(DEFAULT_SCOPE);
+  const overview = useApi(scopeKey(scope), (signal) => api.overview(username, scope, signal));
 
   return (
-    <Section state={overview} loadingLabel={`Loading ${username}’s recent Rapid games…`}>
+    <Section
+      state={overview}
+      loadingLabel={`Loading ${username}’s ${timeClassLabel(scope.timeClass)} games…`}
+    >
       {(data) => (
         <div className="animate-rise space-y-5">
-          <PlayerHeader data={data} />
-          <Tabs api={api} username={data.username} overview={<OverviewPanel overview={data} />} />
+          <PlayerHeader data={data} scope={scope} />
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-board-900/40 px-4 py-3">
+            <p className="text-xs text-chalk-400">
+              Choose the time class and period used by every report.
+            </p>
+            <ScopeSelect scope={scope} onChange={setScope} />
+          </div>
+          <Tabs
+            api={api}
+            username={data.username}
+            scope={scope}
+            overview={<OverviewPanel overview={data} scope={scope} />}
+          />
         </div>
       )}
     </Section>
   );
 }
 
-function PlayerHeader({ data }: { data: Overview }) {
+function PlayerHeader({ data, scope }: { data: Overview; scope: Scope }) {
   const initials = data.username.slice(0, 2).toUpperCase();
   return (
     <Panel className="overflow-hidden">
@@ -52,7 +69,7 @@ function PlayerHeader({ data }: { data: Overview }) {
             {initials}
           </span>
           <div className="min-w-0">
-            <Eyebrow>Chess.com · Rapid</Eyebrow>
+            <Eyebrow>Chess.com · {timeClassLabel(data.time_class)}</Eyebrow>
             <h1 className="mt-1.5 truncate font-display text-3xl leading-none tracking-tight text-chalk-50">
               <a
                 href={`https://www.chess.com/member/${data.username}`}
@@ -64,7 +81,8 @@ function PlayerHeader({ data }: { data: Overview }) {
               </a>
             </h1>
             <p className="mt-2 text-sm text-chalk-400">
-              {formatDate(data.period.start)} – {formatDate(data.period.end)} · rolling 30 days
+              {formatDate(data.period.start)} – {formatDate(data.period.end)} ·{' '}
+              {periodLabel(scope.days).toLowerCase()}
             </p>
           </div>
         </div>
@@ -93,10 +111,12 @@ function PlayerHeader({ data }: { data: Overview }) {
 function Tabs({
   api,
   username,
+  scope,
   overview,
 }: {
   api: ChesspulseApi;
   username: string;
+  scope: Scope;
   overview: ReactNode;
 }) {
   const [active, setActive] = useState<TabId>('overview');
@@ -141,7 +161,7 @@ function Tabs({
             onClick={() => setActive(tab.id)}
             className={`whitespace-nowrap rounded-xl px-4 py-2 text-sm transition-colors ${
               active === tab.id
-                ? 'bg-mint-400 font-semibold text-board-950 shadow-[0_8px_24px_-10px] shadow-mint-400/80'
+                ? 'bg-mint-400 font-semibold text-on-accent shadow-[0_8px_24px_-10px] shadow-mint-400/80'
                 : 'font-medium text-chalk-300 hover:bg-white/5 hover:text-chalk-50'
             }`}
           >
@@ -156,18 +176,26 @@ function Tabs({
         className="pt-5"
       >
         {active === 'overview' && overview}
-        {active === 'form' && <FormPanel api={api} username={username} />}
-        {active === 'rating' && <RatingTab api={api} username={username} />}
-        {active === 'openings' && <OpeningsTab api={api} username={username} />}
-        {active === 'opponents' && <OpponentsTab api={api} username={username} />}
-        {active === 'games' && <GamesPanel api={api} username={username} />}
+        {active === 'form' && <FormPanel api={api} username={username} scope={scope} />}
+        {active === 'rating' && <RatingTab api={api} username={username} scope={scope} />}
+        {active === 'openings' && <OpeningsTab api={api} username={username} scope={scope} />}
+        {active === 'opponents' && <OpponentsTab api={api} username={username} scope={scope} />}
+        {active === 'games' && <GamesPanel api={api} username={username} scope={scope} />}
       </div>
     </div>
   );
 }
 
-function RatingTab({ api, username }: { api: ChesspulseApi; username: string }) {
-  const state = useApi(`${username}`, (signal) => api.ratingHistory(username, signal));
+function RatingTab({
+  api,
+  username,
+  scope,
+}: {
+  api: ChesspulseApi;
+  username: string;
+  scope: Scope;
+}) {
+  const state = useApi(scopeKey(scope), (signal) => api.ratingHistory(username, scope, signal));
   return (
     <Section state={state} loadingLabel="Loading rating history…">
       {(data) => (
@@ -180,9 +208,19 @@ function RatingTab({ api, username }: { api: ChesspulseApi; username: string }) 
   );
 }
 
-function OpeningsTab({ api, username }: { api: ChesspulseApi; username: string }) {
+function OpeningsTab({
+  api,
+  username,
+  scope,
+}: {
+  api: ChesspulseApi;
+  username: string;
+  scope: Scope;
+}) {
   const [sort, setSort] = useState<GroupSort>('games');
-  const state = useApi(`${username}|${sort}`, (signal) => api.openings(username, sort, signal));
+  const state = useApi(`${scopeKey(scope)}|${sort}`, (signal) =>
+    api.openings(username, sort, scope, signal),
+  );
   return (
     <section aria-labelledby="openings-heading" className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -209,9 +247,19 @@ function OpeningsTab({ api, username }: { api: ChesspulseApi; username: string }
   );
 }
 
-function OpponentsTab({ api, username }: { api: ChesspulseApi; username: string }) {
+function OpponentsTab({
+  api,
+  username,
+  scope,
+}: {
+  api: ChesspulseApi;
+  username: string;
+  scope: Scope;
+}) {
   const [sort, setSort] = useState<GroupSort>('games');
-  const state = useApi(`${username}|${sort}`, (signal) => api.opponents(username, sort, signal));
+  const state = useApi(`${scopeKey(scope)}|${sort}`, (signal) =>
+    api.opponents(username, sort, scope, signal),
+  );
   return (
     <section aria-labelledby="opponents-heading" className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">

@@ -41,6 +41,30 @@ class Player(IdPrimaryKeyMixin, TimestampMixin, Base):
             "current_rapid_rating_at IS NULL OR current_rapid_rating IS NOT NULL",
             name="current_rapid_rating_at_requires_rating",
         ),
+        CheckConstraint(
+            "current_blitz_rating IS NULL OR current_blitz_rating >= 0",
+            name="current_blitz_rating_non_negative",
+        ),
+        CheckConstraint(
+            "current_blitz_rating_at IS NULL OR current_blitz_rating IS NOT NULL",
+            name="current_blitz_rating_at_requires_rating",
+        ),
+        CheckConstraint(
+            "current_bullet_rating IS NULL OR current_bullet_rating >= 0",
+            name="current_bullet_rating_non_negative",
+        ),
+        CheckConstraint(
+            "current_bullet_rating_at IS NULL OR current_bullet_rating IS NOT NULL",
+            name="current_bullet_rating_at_requires_rating",
+        ),
+        CheckConstraint(
+            "current_daily_rating IS NULL OR current_daily_rating >= 0",
+            name="current_daily_rating_non_negative",
+        ),
+        CheckConstraint(
+            "current_daily_rating_at IS NULL OR current_daily_rating IS NOT NULL",
+            name="current_daily_rating_at_requires_rating",
+        ),
     )
 
     provider: Mapped[Provider] = mapped_column(str_enum(Provider, "provider"), nullable=False)
@@ -49,10 +73,16 @@ class Player(IdPrimaryKeyMixin, TimestampMixin, Base):
     display_name: Mapped[str | None] = mapped_column(String(255))
     profile_url: Mapped[str | None] = mapped_column(Text)
     avatar_url: Mapped[str | None] = mapped_column(Text)
-    # Current Rapid rating from the provider's player stats, and the provider's
-    # timestamp for that value. Distinct from ratings recorded on individual games.
+    # Current per-class ratings from the provider's player stats, with the provider's
+    # timestamp for each value. Distinct from ratings recorded on individual games.
     current_rapid_rating: Mapped[int | None] = mapped_column(Integer)
     current_rapid_rating_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    current_blitz_rating: Mapped[int | None] = mapped_column(Integer)
+    current_blitz_rating_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    current_bullet_rating: Mapped[int | None] = mapped_column(Integer)
+    current_bullet_rating_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    current_daily_rating: Mapped[int | None] = mapped_column(Integer)
+    current_daily_rating_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
 
     def __repr__(self) -> str:
         return f"Player(id={self.id!r}, provider={self.provider!r}, username={self.username!r})"

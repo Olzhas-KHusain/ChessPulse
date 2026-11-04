@@ -56,11 +56,11 @@ class AnalysisRepository:
         *,
         start: datetime,
         end: datetime,
-        time_class: TimeClass,
+        time_class: TimeClass | None,
     ) -> tuple[Any, ...]:
         return (
             PlayerGame.player_id == player_id,
-            Game.time_class == time_class,
+            *(() if time_class is None else (Game.time_class == time_class,)),
             Game.played_at >= start,
             Game.played_at < end,
         )
@@ -72,7 +72,7 @@ class AnalysisRepository:
         profile_hash: str,
         start: datetime,
         end: datetime,
-        time_class: TimeClass = TimeClass.RAPID,
+        time_class: TimeClass | None = TimeClass.RAPID,
     ) -> list[AnalysedGameRow]:
         """Completed analyses of the player's games in the scope, oldest first."""
         white, black = aliased(Player), aliased(Player)
@@ -127,7 +127,7 @@ class AnalysisRepository:
         *,
         start: datetime,
         end: datetime,
-        time_class: TimeClass = TimeClass.RAPID,
+        time_class: TimeClass | None = TimeClass.RAPID,
     ) -> list[int]:
         stmt = (
             select(Game.id)
@@ -156,7 +156,7 @@ class AnalysisRepository:
         profile_hash: str,
         start: datetime,
         end: datetime,
-        time_class: TimeClass = TimeClass.RAPID,
+        time_class: TimeClass | None = TimeClass.RAPID,
     ) -> dict[str, int]:
         """Job counts by status for the player's games in the scope."""
         stmt = (

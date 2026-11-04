@@ -5,20 +5,26 @@ import { Badge, Eyebrow, Panel } from '../../components/ui';
 import { AnalysisPanel } from '../analysis/AnalysisPanel';
 import { useApi } from '../../hooks/useApi';
 import type { ChesspulseApi } from '../../services/chesspulseApi';
+import type { Scope } from '../../types/api';
 import { formatDateTime, formatNumber, MISSING, OUTCOME_LABEL } from '../../utils/format';
+import { scopeKey, timeClassLabel } from '../player/scope';
 
 export function GameDetailPanel({
   api,
   username,
   gameId,
+  scope,
   onBack,
 }: {
   api: ChesspulseApi;
   username: string;
   gameId: string;
+  scope: Scope;
   onBack: () => void;
 }) {
-  const state = useApi(`${username}|${gameId}`, (signal) => api.game(username, gameId, signal));
+  const state = useApi(`${scopeKey(scope)}|${username}|${gameId}`, (signal) =>
+    api.game(username, gameId, scope, signal),
+  );
   const backRef = useRef<HTMLButtonElement>(null);
   useEffect(() => backRef.current?.focus(), []);
 
@@ -39,7 +45,7 @@ export function GameDetailPanel({
             <div className="animate-rise space-y-4">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
-                  <Eyebrow>Game detail</Eyebrow>
+                  <Eyebrow>Game detail · {timeClassLabel(meta.time_class)}</Eyebrow>
                   <h2
                     id="game-heading"
                     className="mt-1 font-display text-3xl tracking-tight text-chalk-50"
@@ -153,6 +159,7 @@ export function GameDetailPanel({
                 api={api}
                 username={username}
                 gameId={gameId}
+                scope={scope}
                 playerColor={game.color}
               />
             </div>

@@ -44,8 +44,8 @@ def test_window_rejects_naive_datetimes() -> None:
     [
         ({}, None),
         ({"result": GameResult.UNKNOWN}, None),  # unknown result stays eligible, not a loss
-        ({"time_class": TimeClass.BLITZ}, IneligibleReason.NOT_RAPID),
-        ({"time_class": TimeClass.DAILY}, IneligibleReason.NOT_RAPID),
+        ({"time_class": TimeClass.BLITZ}, None),  # every standard-chess class is stored
+        ({"time_class": TimeClass.DAILY}, None),
         ({"rules": "chess960"}, IneligibleReason.VARIANT),
         ({"rules": None}, IneligibleReason.RULES_UNVERIFIED),
     ],

@@ -7,8 +7,24 @@ Status: implemented (Issue 6). Code: `app/analytics/overview.py` (pure metrics),
 
 1. The username is normalized (trim, lowercase) and validated; invalid → `400`.
 2. The player's dataset is served from cache or refreshed (see `cache-policy.md`).
-3. Metrics are computed from stored eligible games in the shared window
-   `[now − 30 d, now)` UTC (see `ingestion.md`).
+3. Metrics are computed from stored eligible games in the selected scope: a
+   `time_class` and a `days` window inside the stored dataset (see
+   `ingestion.md` and “Scope” below).
+
+## Scope
+
+Every player endpoint accepts the same two query parameters:
+
+| Query | Values | Default |
+| ----- | ------ | ------- |
+| `time_class` | `rapid`, `blitz`, `bullet`, `daily`, `all` | `rapid` |
+| `days` | `7`, `30`, `90`, `180`, `365` | `30` |
+
+The stored dataset covers `DATASET_WINDOW_DAYS` (default 90) of **every** standard
+class; the parameters only narrow it at read time and never trigger another upstream
+fetch. `days` may not exceed `DATASET_WINDOW_DAYS` → `400 INVALID_PARAMETER`. The
+response echoes the effective class in `time_class` and the window in `period`.
+`all` combines every class and is stored as `null` internally.
 
 ## Response `200`
 
@@ -16,6 +32,7 @@ Status: implemented (Issue 6). Code: `app/analytics/overview.py` (pure metrics),
 {
   "username": "example_player",
   "period": { "start": "2026-09-20T12:00:00Z", "end": "2026-10-20T12:00:00Z", "timezone": "UTC" },
+  "time_class": "rapid",
   "games_count": 5,
   "wins": 3, "losses": 1, "draws": 1,
   "unknown_results": 0,
@@ -40,7 +57,7 @@ Values are illustrative.
 | `games_count` | Eligible games, including `unknown_results` |
 | `wins` / `losses` / `draws` | Confirmed outcomes from the searched player's perspective |
 | `win_rate` | `wins / (wins + losses + draws) * 100`, half-up to 2 decimals; `null` when that denominator is 0 (never `0` for "no games") |
-| `current_rating` | Current Rapid rating from the provider's **player stats**, never from a game record; `null` when unavailable (then `missing_sections` contains `current_rating`). `current_rating_detail` adds the provider timestamp and source label |
+| `current_rating` | Current rating for the selected class from the provider's **player stats** (`null` for `all`); never from a game record; `null` when unavailable (then `missing_sections` contains `current_rating`). `current_rating_detail` adds the provider timestamp and source label |
 | `current_streak` | Run of identical outcomes ending with the latest game, ordered by `(played_at, internal game id)`; `null` with no games or when the latest result is unknown |
 | `longest_winning_streak` | Longest run of consecutive wins; a loss, draw or unknown result ends a run; `null` with no games, `0` when there are games but no wins |
 | `streak_may_be_incomplete` | `true` when unknown results exist or the dataset is partial: streaks may not reflect every game played |

@@ -23,6 +23,7 @@ from app.models import AnalysisJob, AnalysisJobStatus, GameAnalysis, Player, Pro
 from app.repositories import GameRepository
 from app.schemas.analysis import AnalysisStateResponse
 from app.services.games import GameNotFoundError
+from app.services.scope import DEFAULT_SCOPE, Scope
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,13 +50,18 @@ class AnalysisService:
         self._settings = settings
         self._games = GameRepository(session)
 
-    def _game(self, username: str, game_id: str, now: datetime) -> tuple[Player, int]:
+    def _game(self, username: str, game_id: str, now: datetime, scope: Scope) -> tuple[Player, int]:
         if not 1 <= len(game_id) <= 128:
             raise GameNotFoundError(game_id)
         status = self._cache.ensure_dataset(username, now)
-        window = analysis_window(now)
+        window = analysis_window(now, scope.days)
         row = self._games.get_player_game(
-            status.player_id, Provider.CHESS_COM, game_id, start=window.start, end=window.end
+            status.player_id,
+            Provider.CHESS_COM,
+            game_id,
+            start=window.start,
+            end=window.end,
+            time_class=scope.time_class,
         )
         if row is None:
             raise GameNotFoundError(game_id)
@@ -94,14 +100,28 @@ class AnalysisService:
             analysis=None,
         )
 
-    def get_state(self, username: str, game_id: str, now: datetime) -> AnalysisStateResponse:
-        player, game_db_id = self._game(username, game_id, now)
+    def get_state(
+        self,
+        username: str,
+        game_id: str,
+        now: datetime,
+        *,
+        scope: Scope = DEFAULT_SCOPE,
+    ) -> AnalysisStateResponse:
+        player, game_db_id = self._game(username, game_id, now, scope)
         state = self._read_state(game_db_id)
         return _response(player.username, game_id, state)
 
-    def request(self, username: str, game_id: str, now: datetime) -> AnalysisStateResponse:
+    def request(
+        self,
+        username: str,
+        game_id: str,
+        now: datetime,
+        *,
+        scope: Scope = DEFAULT_SCOPE,
+    ) -> AnalysisStateResponse:
         """Return a cached analysis or enqueue a job; safe to call repeatedly."""
-        player, game_db_id = self._game(username, game_id, now)
+        player, game_db_id = self._game(username, game_id, now, scope)
         state = self._read_state(game_db_id)
         if state.status == "completed":
             return _response(player.username, game_id, state)

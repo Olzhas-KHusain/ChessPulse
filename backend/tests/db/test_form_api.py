@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.engine.uci import EngineIdentity, Evaluation
 from app.engine.worker import run_once
+from app.models import TimeClass
 from app.providers.types import ArchiveMonth
 from tests.db.conftest import Client
 from tests.ingestion_helpers import NOW, OWNER, FakeProvider, game
@@ -95,3 +96,28 @@ def test_form_report_starts_empty_then_aggregates_analysed_games(
     assert again["queued"] == 0
     assert again["already_analyzed"] == 2
     assert again["pending"] == 0
+
+
+def test_form_scope_selects_time_class(client: Client) -> None:
+    provider = FakeProvider(
+        months={
+            OCT: [
+                game(NOW - timedelta(days=5), game_id="live:1", pgn=GOOD_PGN),
+                game(
+                    NOW - timedelta(days=4),
+                    game_id="live:2",
+                    pgn=GOOD_PGN,
+                    time_class=TimeClass.BLITZ,
+                ),
+            ]
+        }
+    )
+    api = client(provider)
+    assert api.get(f"{BASE}/overview").status_code == 200  # ingests the dataset
+
+    rapid = api.get(f"{BASE}/form").json()
+    assert rapid["time_class"] == "rapid" and rapid["games_total"] == 1
+    blitz = api.get(f"{BASE}/form", params={"time_class": "blitz"}).json()
+    assert blitz["time_class"] == "blitz" and blitz["games_total"] == 1
+    everything = api.get(f"{BASE}/form", params={"time_class": "all"}).json()
+    assert everything["time_class"] == "all" and everything["games_total"] == 2

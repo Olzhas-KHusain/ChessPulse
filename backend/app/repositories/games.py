@@ -6,7 +6,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import ColumnElement, func, select, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, aliased, joinedload
 
@@ -41,6 +41,11 @@ _COALESCED_FIELDS = (
 )
 # Required fields: always taken from the latest validated record.
 _REPLACED_FIELDS = ("played_at", "time_class", "white_player_id", "black_player_id", "result")
+
+
+def _time_class_filter(time_class: TimeClass | None) -> tuple[ColumnElement[bool], ...]:
+    """``None`` means every stored class ("all"); otherwise restrict to one class."""
+    return () if time_class is None else (Game.time_class == time_class,)
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,7 +204,7 @@ class GameRepository:
         *,
         start: datetime,
         end: datetime,
-        time_class: TimeClass = TimeClass.RAPID,
+        time_class: TimeClass | None = TimeClass.RAPID,
         limit: int = 50,
         after: PageCursor | None = None,
         result: PlayerResult | None = None,
@@ -223,7 +228,7 @@ class GameRepository:
             .join(Game, Game.id == PlayerGame.game_id)
             .where(
                 PlayerGame.player_id == player_id,
-                Game.time_class == time_class,
+                *_time_class_filter(time_class),
                 Game.played_at >= start,
                 Game.played_at < end,
             )
@@ -253,7 +258,7 @@ class GameRepository:
         *,
         start: datetime,
         end: datetime,
-        time_class: TimeClass = TimeClass.RAPID,
+        time_class: TimeClass | None = TimeClass.RAPID,
     ) -> list[tuple[datetime, int, PlayerResult]]:
         """``(played_at, game_id, result)`` for every game of a tracked player in
         ``[start, end)``. A single lightweight query; the window bounds the row count."""
@@ -264,7 +269,7 @@ class GameRepository:
             .join(PlayerGame, PlayerGame.game_id == Game.id)
             .where(
                 PlayerGame.player_id == player_id,
-                Game.time_class == time_class,
+                *_time_class_filter(time_class),
                 Game.played_at >= start,
                 Game.played_at < end,
             )
@@ -273,10 +278,16 @@ class GameRepository:
         return [(played_at, gid, result) for played_at, gid, result in self._session.execute(stmt)]
 
     def list_breakdown_rows(
-        self, player_id: int, *, start: datetime, end: datetime
+        self,
+        player_id: int,
+        *,
+        start: datetime,
+        end: datetime,
+        time_class: TimeClass | None = TimeClass.RAPID,
     ) -> list[BreakdownRow]:
-        """Every Rapid game of a tracked player in ``[start, end)`` with the opponent and
-        opening columns needed by breakdowns, in one query (no N+1)."""
+        """Every game of the requested class of a tracked player in ``[start, end)``
+        with the opponent and opening columns needed by breakdowns, in one query (no
+        N+1). ``time_class=None`` combines every stored class."""
         _require_aware(start, "start")
         _require_aware(end, "end")
         white, black = aliased(Player), aliased(Player)
@@ -302,7 +313,7 @@ class GameRepository:
             .outerjoin(Opening, Opening.id == Game.opening_id)
             .where(
                 PlayerGame.player_id == player_id,
-                Game.time_class == TimeClass.RAPID,
+                *_time_class_filter(time_class),
                 Game.played_at >= start,
                 Game.played_at < end,
             )
@@ -336,9 +347,10 @@ class GameRepository:
         *,
         start: datetime,
         end: datetime,
+        time_class: TimeClass | None = TimeClass.RAPID,
     ) -> PlayerGameRow | None:
-        """One game, only if it belongs to the player's eligible Rapid dataset in
-        ``[start, end)``; otherwise ``None`` (other players' or ineligible games)."""
+        """One game, only if it belongs to the player's dataset of the requested class
+        in ``[start, end)``; otherwise ``None`` (other players' or ineligible games)."""
         _require_aware(start, "start")
         _require_aware(end, "end")
         stmt = (
@@ -348,7 +360,7 @@ class GameRepository:
                 PlayerGame.player_id == player_id,
                 Game.provider == provider,
                 Game.provider_game_id == provider_game_id,
-                Game.time_class == TimeClass.RAPID,
+                *_time_class_filter(time_class),
                 Game.played_at >= start,
                 Game.played_at < end,
             )

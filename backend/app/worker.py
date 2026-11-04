@@ -13,27 +13,15 @@ it out of the API process means a long search never delays a request.
 from __future__ import annotations
 
 import argparse
-import shutil
 import sys
 import time
-from pathlib import Path
 
-from app.core.config import Settings, load_settings
+from app.core.config import load_settings
 from app.core.logging import configure_logging
 from app.db.session import build_engine, build_session_factory
-from app.engine.uci import EngineUnavailable, StockfishEngine
+from app.engine.runtime import resolve_engine_path, stockfish_factory
+from app.engine.uci import EngineUnavailable
 from app.engine.worker import requeue_stale_jobs, run_once
-
-
-def resolve_engine_path(settings: Settings) -> str:
-    """Return a usable Stockfish executable path or raise :class:`EngineUnavailable`."""
-    candidate = settings.stockfish_path.strip() or (shutil.which("stockfish") or "")
-    if not candidate or not Path(candidate).is_file():
-        raise EngineUnavailable(
-            "Stockfish was not found. Install it (winget install Stockfish.Stockfish) "
-            "or set STOCKFISH_PATH to the executable."
-        )
-    return candidate
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -63,22 +51,14 @@ def main(argv: list[str] | None = None) -> int:
 
     configure_logging(settings.log_level)
     try:
-        engine_path = resolve_engine_path(settings)
+        resolve_engine_path(settings)
     except EngineUnavailable as exc:
         print(str(exc), file=sys.stderr)
         return 2
 
     engine = build_engine(settings)
     session_factory = build_session_factory(engine)
-
-    def engine_factory() -> StockfishEngine:
-        return StockfishEngine(
-            engine_path,
-            depth=settings.analysis_depth,
-            threads=settings.analysis_threads,
-            hash_mb=settings.analysis_hash_mb,
-            move_timeout_seconds=settings.analysis_move_timeout_seconds,
-        )
+    engine_factory = stockfish_factory(settings)
 
     with session_factory() as session:
         requeued = requeue_stale_jobs(session, settings.analysis_stale_job_minutes)

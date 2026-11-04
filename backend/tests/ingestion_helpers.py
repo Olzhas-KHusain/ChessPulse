@@ -79,6 +79,9 @@ class FakeProvider:
     username: str = OWNER
     player_id: str | None = "123"
     rapid_rating: int | None = 1523
+    blitz_rating: int | None = None
+    bullet_rating: int | None = None
+    daily_rating: int | None = None
     calls: list[str] = field(default_factory=list)
 
     def get_profile(self, username: str) -> ProviderProfile:
@@ -100,9 +103,25 @@ class FakeProvider:
         self.calls.append("stats")
         if self.stats_error:
             raise self.stats_error
-        if self.rapid_rating is None:
-            return ProviderStats(False, None, None, META)
-        return ProviderStats(True, self.rapid_rating, NOW, META)
+
+        def rated(rating: int | None) -> int | None:
+            return NOW if rating is not None else None
+
+        return ProviderStats(
+            rapid_section_present=self.rapid_rating is not None,
+            rapid_rating=self.rapid_rating,
+            rapid_rating_at=rated(self.rapid_rating),
+            blitz_section_present=self.blitz_rating is not None,
+            blitz_rating=self.blitz_rating,
+            blitz_rating_at=rated(self.blitz_rating),
+            bullet_section_present=self.bullet_rating is not None,
+            bullet_rating=self.bullet_rating,
+            bullet_rating_at=rated(self.bullet_rating),
+            daily_section_present=self.daily_rating is not None,
+            daily_rating=self.daily_rating,
+            daily_rating_at=rated(self.daily_rating),
+            meta=META,
+        )
 
     def list_archive_months(self, username: str) -> ArchiveIndex:
         self.calls.append("archives")

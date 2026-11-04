@@ -12,6 +12,7 @@ import { EmptyNotice } from '../../components/StateViews';
 import { Eyebrow, Panel } from '../../components/ui';
 import type { RatingHistory } from '../../types/api';
 import { formatDate, formatDateTime, formatNumber } from '../../utils/format';
+import { timeClassLabel } from '../player/scope';
 
 const AXIS_TICK = { fill: '#8d887d', fontSize: 11 };
 const AXIS_LABEL = { fill: '#6d6a63', fontSize: 11 };
@@ -31,7 +32,7 @@ export function RatingHistoryPanel({ history }: { history: RatingHistory }) {
             id="rating-heading"
             className="mt-1 font-display text-2xl tracking-tight text-chalk-50"
           >
-            Rating history (Rapid)
+            Rating history ({timeClassLabel(history.time_class)})
           </h2>
         </div>
         {last && (

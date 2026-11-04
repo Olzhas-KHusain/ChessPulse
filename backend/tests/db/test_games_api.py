@@ -211,3 +211,21 @@ def test_cursor_round_trip_rejects_tampering(client: Client) -> None:
     forged = encode_cursor(NOW, 1, None).replace("A", "B", 1) + "!!"
     response = client(_provider()).get(BASE, params={"cursor": forged})
     assert response.status_code == 400
+
+
+def test_scope_selects_time_class_for_list_and_details(client: Client) -> None:
+    c = client(_provider())
+
+    default = c.get(BASE).json()
+    assert default["time_class"] == "rapid"
+    assert "live:6" not in _ids(default)
+
+    blitz = c.get(BASE, params={"time_class": "blitz"}).json()
+    assert blitz["time_class"] == "blitz"
+    assert _ids(blitz) == ["live:6"]
+    assert c.get(f"{BASE}/live:6").status_code == 404
+    assert c.get(f"{BASE}/live:6", params={"time_class": "blitz"}).status_code == 200
+
+    everything = c.get(BASE, params={"time_class": "all"}).json()
+    assert everything["time_class"] == "all"
+    assert len(_ids(everything)) == 6

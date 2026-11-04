@@ -11,10 +11,10 @@ produced from a single game or from the provider's own accuracy field.
 
 ## Scope
 
-Both endpoints use the player's eligible dataset (Rapid, standard chess, current 30-day
-UTC window; see `ingestion.md` and `api-games.md`) and the cache policy. The scope is
-parameterised by `time_class` internally, but the public API currently exposes only
-`rapid`; broader time classes and arbitrary date ranges are the next scaling step.
+Both endpoints use the player's eligible dataset (every standard time class, narrowed
+by the shared `time_class` / `days` scope; see `api-overview.md`, `ingestion.md` and
+`api-games.md`) and the cache policy. Analyses are cached per game, so switching the
+scope reuses work already done and only queues games that lack a completed analysis.
 
 ## `POST /api/v1/players/{username}/form/analyze`
 

@@ -13,6 +13,7 @@ from app.cache.service import PlayerDatasetCache
 from app.models import Player
 from app.repositories import GameRepository
 from app.schemas.overview import CurrentRating, OverviewResponse, Period, StreakOut
+from app.services.scope import DEFAULT_SCOPE, Scope
 
 
 class OverviewService:
@@ -21,10 +22,14 @@ class OverviewService:
         self._cache = cache
         self._games = GameRepository(session)
 
-    def get_overview(self, username: str, now: datetime) -> OverviewResponse:
+    def get_overview(
+        self, username: str, now: datetime, scope: Scope = DEFAULT_SCOPE
+    ) -> OverviewResponse:
         status = self._cache.ensure_dataset(username, now)
-        window = analysis_window(now)
-        rows = self._games.list_outcomes(status.player_id, start=window.start, end=window.end)
+        window = analysis_window(now, scope.days)
+        rows = self._games.list_outcomes(
+            status.player_id, start=window.start, end=window.end, time_class=scope.time_class
+        )
         metrics = compute_overview(
             (GameOutcome(played_at, gid, result) for played_at, gid, result in rows),
             dataset_complete=status.data_status is not DataStatus.PARTIAL,
@@ -32,10 +37,13 @@ class OverviewService:
         player = self._session.get_one(Player, status.player_id)
 
         rating = None
-        if player.current_rapid_rating is not None:
-            rating = CurrentRating(
-                rating=player.current_rapid_rating, as_of=player.current_rapid_rating_at
-            )
+        if scope.time_class is not None:
+            value = getattr(player, f"current_{scope.time_class.value}_rating")
+            if value is not None:
+                rating = CurrentRating(
+                    rating=value,
+                    as_of=getattr(player, f"current_{scope.time_class.value}_rating_at"),
+                )
         missing: list[str] = []
         if rating is None:
             missing.append("current_rating")
@@ -46,6 +54,7 @@ class OverviewService:
         return OverviewResponse(
             username=player.username,
             period=Period(start=window.start, end=window.end),
+            time_class=scope.time_class_value,
             games_count=metrics.games_count,
             wins=metrics.wins,
             losses=metrics.losses,

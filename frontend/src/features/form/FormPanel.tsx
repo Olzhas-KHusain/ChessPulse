@@ -18,8 +18,10 @@ import type {
   FormMoment,
   FormReport,
   MoveClassification,
+  Scope,
 } from '../../types/api';
 import { formatDate, formatDateTime, formatNumber, MISSING } from '../../utils/format';
+import { periodLabel, timeClassLabel } from '../player/scope';
 
 const POLL_MS = 3000;
 
@@ -55,14 +57,22 @@ const AXIS_LABEL = { fill: '#6d6a63', fontSize: 11 };
  * points given up per analysed game — never an Elo estimate. The report states how many
  * games are analysed and keeps polling while the worker finishes the rest.
  */
-export function FormPanel({ api, username }: { api: ChesspulseApi; username: string }) {
+export function FormPanel({
+  api,
+  username,
+  scope,
+}: {
+  api: ChesspulseApi;
+  username: string;
+  scope: Scope;
+}) {
   const [report, setReport] = useState<FormReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [queueing, setQueueing] = useState(false);
 
   const load = useCallback(
     (signal?: AbortSignal) =>
-      api.form(username, signal).then(
+      api.form(username, scope, signal).then(
         (next) => {
           if (signal?.aborted) return;
           setReport(next);
@@ -73,7 +83,7 @@ export function FormPanel({ api, username }: { api: ChesspulseApi; username: str
           setError(cause instanceof ApiError ? cause.message : 'Could not load the form report.');
         },
       ),
-    [api, username],
+    [api, username, scope],
   );
 
   useEffect(() => {
@@ -88,16 +98,16 @@ export function FormPanel({ api, username }: { api: ChesspulseApi; username: str
   useEffect(() => {
     if (!pending) return undefined;
     const timer = setInterval(() => {
-      api.form(username).then(setReport, () => undefined);
+      api.form(username, scope).then(setReport, () => undefined);
     }, POLL_MS);
     return () => clearInterval(timer);
-  }, [api, username, pending]);
+  }, [api, username, scope, pending]);
 
   async function analyzeAll() {
     setQueueing(true);
     setError(null);
     try {
-      await api.analyzeForm(username);
+      await api.analyzeForm(username, scope);
       await load();
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : 'The analysis could not be requested.');
@@ -146,7 +156,8 @@ export function FormPanel({ api, username }: { api: ChesspulseApi; username: str
           </h2>
           <p className="mt-1 text-sm text-chalk-400">
             {formatNumber(report.games_analyzed)} of {formatNumber(report.games_total)} eligible
-            games analysed · {report.time_class} · rolling 30 days
+            games analysed · {timeClassLabel(report.time_class)} ·{' '}
+            {periodLabel(scope.days).toLowerCase()}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -160,7 +171,7 @@ export function FormPanel({ api, username }: { api: ChesspulseApi; username: str
             type="button"
             onClick={() => void analyzeAll()}
             disabled={queueing || missing <= 0}
-            className="rounded-xl bg-mint-400 px-4 py-2 text-sm font-semibold text-board-950 shadow-[0_8px_24px_-10px] shadow-mint-400/80 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-xl bg-mint-400 px-4 py-2 text-sm font-semibold text-on-accent shadow-[0_8px_24px_-10px] shadow-mint-400/80 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {queueing
               ? 'Queueing…'

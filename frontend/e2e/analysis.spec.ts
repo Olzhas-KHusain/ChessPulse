@@ -39,8 +39,9 @@ test('request, complete and cache an engine analysis', async ({ page }) => {
   // reload it returns to the search landing. The cached-analysis path is
   // verified by navigating back to the list and reopening the same game.
   await page.getByRole('button', { name: /Back/i }).click();
-  await expect(page.getByRole('button', { name: /^Details of the game against / }).first())
-    .toBeVisible({ timeout: 30_000 });
+  await expect(
+    page.getByRole('button', { name: /^Details of the game against / }).first(),
+  ).toBeVisible({ timeout: 30_000 });
   await page
     .getByRole('button', { name: /^Details of the game against / })
     .first()

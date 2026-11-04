@@ -4,8 +4,9 @@ import { DataStatusBanner, EmptyNotice, Section } from '../../components/StateVi
 import { Badge, Eyebrow, Panel } from '../../components/ui';
 import { useApi } from '../../hooks/useApi';
 import type { ChesspulseApi } from '../../services/chesspulseApi';
-import type { GameSummary, PlayerOutcome } from '../../types/api';
+import type { GameSummary, PlayerOutcome, Scope } from '../../types/api';
 import { formatDateTime, formatNumber, MISSING, OUTCOME_LABEL } from '../../utils/format';
+import { periodLabel, scopeKey, timeClassLabel } from '../player/scope';
 import { GameDetailPanel } from './GameDetailPanel';
 
 const PAGE_SIZE = 20;
@@ -17,7 +18,15 @@ const ACCENT: Record<PlayerOutcome, string> = {
   unknown: 'bg-gold-400',
 };
 
-export function GamesPanel({ api, username }: { api: ChesspulseApi; username: string }) {
+export function GamesPanel({
+  api,
+  username,
+  scope,
+}: {
+  api: ChesspulseApi;
+  username: string;
+  scope: Scope;
+}) {
   const [result, setResult] = useState<PlayerOutcome | null>(null);
   // cursors[i] is the cursor that loads page i (page 0 has none).
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
@@ -28,8 +37,8 @@ export function GamesPanel({ api, username }: { api: ChesspulseApi; username: st
   const cursor = cursors[page] ?? null;
   const filterId = useId();
 
-  const state = useApi(`${username}|${result ?? ''}|${cursor ?? ''}`, (signal) =>
-    api.games(username, { cursor, result, limit: PAGE_SIZE }, signal),
+  const state = useApi(`${scopeKey(scope)}|${username}|${result ?? ''}|${cursor ?? ''}`, (signal) =>
+    api.games(username, { cursor, result, limit: PAGE_SIZE, scope }, signal),
   );
 
   function changeFilter(value: string) {
@@ -43,6 +52,7 @@ export function GamesPanel({ api, username }: { api: ChesspulseApi; username: st
         api={api}
         username={username}
         gameId={openGame}
+        scope={scope}
         onBack={() => setOpenGame(null)}
       />
     );
@@ -90,7 +100,10 @@ export function GamesPanel({ api, username }: { api: ChesspulseApi; username: st
           <div className="space-y-3">
             <DataStatusBanner meta={data} />
             {data.items.length === 0 ? (
-              <EmptyNotice>No games match this filter in the last 30 days.</EmptyNotice>
+              <EmptyNotice>
+                No {timeClassLabel(data.time_class)} games match this filter in the{' '}
+                {periodLabel(scope.days).toLowerCase()}.
+              </EmptyNotice>
             ) : (
               <Panel className="overflow-hidden">
                 <ul className="divide-y divide-white/5">

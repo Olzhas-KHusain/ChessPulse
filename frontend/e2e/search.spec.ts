@@ -27,9 +27,9 @@ test('search, validation and overview metrics', async ({ page }) => {
   await input.fill(`no-such-player-${Date.now()}`);
   await page.getByRole('button', { name: /Analyze/ }).click();
   if (page.url().split('#')[0].includes('no-such-player')) {
-    await expect(
-      page.getByText('No Chess.com player with this username was found.'),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('No Chess.com player with this username was found.')).toBeVisible({
+      timeout: 30_000,
+    });
   }
 
   // Real player: overview metrics render.

@@ -1,17 +1,25 @@
 # ChessPulse
 
-Web application for analyzing a Chess.com player's Rapid games from the last rolling
-30 days. This repository currently contains the **development environment, application
-skeleton, database schema, Chess.com provider adapter, ingestion, cache policy, and the
-player endpoints** `GET /api/v1/players/{username}/overview`, `/rating-history`,
-`/openings`, `/opponents`, `/games`, `/games/{game_id}` and `/form`, plus the **React
-dashboard** (search, overview, cross-game form report, rating chart, openings, opponents,
-paginated games, game details with opt-in Stockfish analysis).
+Web application for analyzing a Chess.com player's standard-chess games (Rapid, Blitz,
+Bullet and Daily) over a selectable window of 7 to 365 days, plus a free analysis board
+for arbitrary positions. The stored dataset covers `DATASET_WINDOW_DAYS` (90 by
+default) of every time class; each request narrows it by `time_class` and `days` at read
+time, so no scope needs its own fetch or cache key.
+
+This repository contains the **development environment, database schema, Chess.com
+provider adapter, ingestion, cache policy, the player endpoints**
+`GET /api/v1/players/{username}/overview`, `/rating-history`, `/openings`, `/opponents`,
+`/games`, `/games/{game_id}` and `/form`, the **board endpoints**
+`POST /api/v1/board/evaluate` and `/board/move`, the **React dashboard** (search,
+overview, cross-game form report, rating chart, openings, opponents, paginated games,
+game details with opt-in Stockfish analysis), a **free board** (place any pieces, play
+legal moves, engine classification) and a **dark/light theme**.
 
 Engineering rules: `AGENT.md`. Workflow: `process.md`. Product and technical
 specification: `spec.md`. Feature specifications: `docs/specs/` (database schema,
-Chess.com provider, ingestion, cache policy, overview, breakdown, games, engine analysis
-and form report APIs, frontend dashboard). Architecture decisions: `docs/adr/`.
+Chess.com provider, ingestion, cache policy, overview, breakdown, games, engine analysis,
+free board and form report APIs, frontend dashboard). Architecture decisions:
+`docs/adr/`.
 
 ## Stack
 
@@ -55,7 +63,7 @@ cd backend
 python3 -m venv .venv
 source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
-alembic upgrade head         # creates/updates the schema (revisions 0001–0003)
+alembic upgrade head         # creates/updates the schema (revisions 0001–0004)
 cd ..
 
 # 4. Frontend (first time: npm install creates package-lock.json; commit it, later use npm ci)
@@ -122,6 +130,20 @@ Endpoints:
 - `GET  /api/v1/players/{username}/form` — cross-game report: accuracy trend, win
   probability lost per game, leaks by phase/colour/opening and the most expensive moves.
 
+### Free board
+
+The free board does not read the player dataset. It runs the same Stockfish binary
+synchronously for one position:
+
+- `POST /api/v1/board/evaluate` — `{"fen": "..."}` → evaluation, game status and the
+  engine's best move.
+- `POST /api/v1/board/move` — `{"fen": "...", "move_uci": "e2e4"}` → the resulting FEN,
+  centipawn loss and classification (`best`, `good`, `inaccuracy`, `mistake`, `blunder`),
+  plus the best move before and after the played move.
+
+Both endpoints validate the FEN and the move; details and error codes are in
+`docs/specs/api-board.md`. The engine identity and depth are part of every response.
+
 ### Windows notes (Git Bash + Docker Desktop)
 
 - Activate the virtual environment with `source .venv/Scripts/activate` (not
@@ -156,6 +178,7 @@ with a message that names the variable but never prints its value.
 | `UPSTREAM_MAX_RETRY_AFTER_SECONDS` | no     | Longest Retry-After/backoff waited, `10` by default (0–120)    |
 | `CACHE_TTL_SECONDS`              | no       | Dataset freshness, `43200` (12 h) by default                   |
 | `REFRESH_FAILURE_COOLDOWN_SECONDS` | no     | Wait after a failed refresh, `300` by default                  |
+| `DATASET_WINDOW_DAYS`            | no       | Stored window for all classes, `90` by default (30–730)        |
 | `STOCKFISH_PATH`                 | no       | Stockfish executable; empty = search `PATH`                    |
 | `STATIC_DIR`                     | no       | Built frontend directory; empty = API only (dev mode)          |
 | `ANALYSIS_DEPTH`                 | no       | Fixed search depth, `12` by default (6–30)                     |
@@ -170,9 +193,11 @@ The values in `.env.example` are local-development placeholders, not real creden
 ## Database schema and migrations (Alembic)
 
 The schema has seven tables: `players`, `games`, `player_games`, `openings`,
-`cache_metadata`, `analysis_jobs`, `game_analysis`. Keys, constraints, deletion rules, UTC
-handling, and the differences from `spec.md` are documented in
-`docs/specs/database-schema.md`.
+`cache_metadata`, `analysis_jobs`, `game_analysis`. `players` stores the provider's
+current rating for each class (`current_rapid_rating`, `current_blitz_rating`,
+`current_bullet_rating`, `current_daily_rating`, each with its `*_at` timestamp).
+Keys, constraints, deletion rules, UTC handling, and the differences from `spec.md` are
+documented in `docs/specs/database-schema.md`.
 
 Run from `backend/` with the virtual environment active. The URL is read from
 `DATABASE_URL`, not from `alembic.ini`.
@@ -249,7 +274,11 @@ with contact information, as Chess.com recommends, for example
 - Known limitations and deferred (non-MVP) features: `docs/KNOWN_LIMITATIONS.md`.
 - Data freshness: player data is cached for 12 hours; every API response states
   `data_status` (`fresh`, `partial`, `stale`) and `last_successful_update`.
-- Engine-based metrics (accuracy, blunders, estimated Elo) are **not** part of the MVP.
+- Every player endpoint accepts `time_class` (`rapid`, `blitz`, `bullet`, `daily`,
+  `all`; default `rapid`) and `days` (7, 30, 90, 180, 365; default 30). Both only
+  narrow the stored dataset. `days` cannot exceed `DATASET_WINDOW_DAYS`.
+- Engine metrics (accuracy, centipawn loss, move classification) are implemented for
+  individual games and the cross-game form report, and are exposed by the free board.
 
 ## Containerization and deployment
 

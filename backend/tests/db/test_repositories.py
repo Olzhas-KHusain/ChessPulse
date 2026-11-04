@@ -135,14 +135,16 @@ def test_profile_with_existing_player_id_under_new_username_is_rejected(session:
     session.rollback()
 
 
-def test_set_current_rapid_rating(session: Session) -> None:
+def test_set_current_class_rating(session: Session) -> None:
     repo = PlayerRepository(session)
     player_id = repo.ensure_usernames(CHESS_COM, ["alice"])["alice"]
-    repo.set_current_rapid_rating(player_id, 1523, T0)
+    repo.set_current_rating(player_id, TimeClass.RAPID, 1523, T0)
+    repo.set_current_rating(player_id, TimeClass.BLITZ, 1400, T0)
     session.commit()
     stored = repo.get_by_username(CHESS_COM, "alice")
     assert stored is not None
     assert (stored.current_rapid_rating, stored.current_rapid_rating_at) == (1523, T0)
+    assert (stored.current_blitz_rating, stored.current_blitz_rating_at) == (1400, T0)
 
 
 # --- games: duplicate-safe upsert -------------------------------------------------

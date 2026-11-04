@@ -9,8 +9,9 @@
 - **Rating semantics.** Game records do not document whether a rating is pre- or
   post-game; ChessPulse labels it "reported with the game". The current rating comes
   from the player's stats and is shown separately.
-- **Variants.** Only `rules == "chess"` Rapid games are analysed; Chess960 and other
-  variants, and games without a `rules` value, are excluded.
+- **Variants.** Only `rules == "chess"` games are analysed; Chess960 and other
+  variants, and games without a `rules` value, are excluded. Rapid, Blitz, Bullet and
+  Daily are all stored and selectable.
 - **Unknown results** are kept as `unknown`, excluded from the win rate, and they break
   streaks (`streak_may_be_incomplete`).
 - **Openings** are identified by Chess.com's opening page slug. The display name is the
@@ -57,6 +58,9 @@
 - **Payload size.** A full game stores one JSONB document (roughly 10–40 kB); aggregate
   queries over many games will need a summary table rather than JSONB scans.
 - **PGN is required.** Games without a PGN cannot be analysed and fail with `missing_pgn`.
+- **Free board searches synchronously.** One request occupies one Stockfish process for
+  the configured depth; there is no queue, priority or per-user quota, so concurrent
+  users share the worker pool.
 
 ## Cross-game form report
 
@@ -72,14 +76,16 @@
   so instead of naming a leak.
 - **Unknown openings** are grouped as "Unknown opening" and are excluded from the
   primary-leak candidates unless they reach the sample threshold.
-- **Rapid only, 30 days only.** The service is parameterised by `time_class`, but the
-  router still fixes Rapid and the rolling window; scaling is the next step.
+- **One class or all classes at a time.** The report follows the selected `time_class`
+  and `days`; it never mixes scopes within one response. Analyses are cached per game,
+  so switching scope reuses completed work.
 
 ## Explicitly deferred (not in the MVP)
 
 - Practice queue derived from the report's top moments.
 - "Brilliant" or other narrative labels without a written, verifiable definition.
 - `player_statistics` aggregate table (not needed yet; aggregates are computed per request).
-- Blitz, Bullet, Daily and variant analytics; windows other than 30 days.
+- Chess variants and arbitrary (non-published) date ranges; the published options are
+  7/30/90/180/365 days within `DATASET_WINDOW_DAYS`.
 - Accounts, authentication, private Chess.com data.
-- Deployment target, containers for backend/frontend, production monitoring.
+- Production monitoring and alerting beyond the container healthchecks.

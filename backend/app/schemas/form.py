@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.schemas.overview import Period
+from app.schemas.overview import Period, TimeClassOut
 
 LeakKind = Literal["phase", "color", "opening"]
 Phase = Literal["opening", "middlegame", "late"]
@@ -76,7 +76,7 @@ class FormReportResponse(BaseModel):
 
     username: str
     period: Period
-    time_class: str
+    time_class: TimeClassOut
     data_status: str
     refresh_error: str | None = None
     as_of: datetime
@@ -107,7 +107,7 @@ class AnalyzeScopeResponse(BaseModel):
     """Result of queueing every missing analysis in the scope."""
 
     username: str
-    time_class: str
+    time_class: TimeClassOut
     games_total: int
     already_analyzed: int
     queued: int

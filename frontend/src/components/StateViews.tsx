@@ -10,7 +10,7 @@ function errorMessage(error: ApiError): string {
     case 'PLAYER_NOT_FOUND':
       return 'No Chess.com player with this username was found.';
     case 'GAME_NOT_FOUND':
-      return 'This game is not among the player’s Rapid games of the last 30 days.';
+      return 'This game is not among the player’s games in the selected time class and period.';
     case 'INVALID_USERNAME':
     case 'INVALID_PARAMETER':
       return error.message;

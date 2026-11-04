@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { Badge, Eyebrow, Panel, type BadgeTone } from '../../components/ui';
 import { ApiError, type ChesspulseApi } from '../../services/chesspulseApi';
-import type { AnalysisState, MoveClassification } from '../../types/api';
+import type { AnalysisState, MoveClassification, Scope } from '../../types/api';
 import { formatNumber, MISSING } from '../../utils/format';
 
 const CLASSIFICATION_TONE: Record<MoveClassification, BadgeTone> = {
@@ -43,11 +43,13 @@ export function AnalysisPanel({
   api,
   username,
   gameId,
+  scope,
   playerColor,
 }: {
   api: ChesspulseApi;
   username: string;
   gameId: string;
+  scope: Scope;
   playerColor: 'white' | 'black';
 }) {
   const [state, setState] = useState<AnalysisState | null>(null);
@@ -58,7 +60,7 @@ export function AnalysisPanel({
     const controller = new AbortController();
     setState(null);
     setError(null);
-    api.analysis(username, gameId, controller.signal).then(
+    api.analysis(username, gameId, scope, controller.signal).then(
       (next) => {
         if (!controller.signal.aborted) setState(next);
       },
@@ -68,21 +70,21 @@ export function AnalysisPanel({
       },
     );
     return () => controller.abort();
-  }, [api, username, gameId]);
+  }, [api, username, gameId, scope]);
 
   useEffect(() => {
     if (state?.status !== 'queued' && state?.status !== 'running') return undefined;
     const timer = setInterval(() => {
-      api.analysis(username, gameId).then(setState, () => undefined);
+      api.analysis(username, gameId, scope).then(setState, () => undefined);
     }, POLL_MS);
     return () => clearInterval(timer);
-  }, [api, username, gameId, state?.status]);
+  }, [api, username, gameId, scope, state?.status]);
 
   async function request() {
     setRequesting(true);
     setError(null);
     try {
-      setState(await api.requestAnalysis(username, gameId));
+      setState(await api.requestAnalysis(username, gameId, scope));
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : 'The analysis could not be requested.');
     } finally {
@@ -133,7 +135,7 @@ export function AnalysisPanel({
             type="button"
             onClick={request}
             disabled={requesting}
-            className="rounded-xl bg-mint-400 px-4 py-2 text-sm font-semibold text-board-950 shadow-[0_8px_24px_-10px] shadow-mint-400/80 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-xl bg-mint-400 px-4 py-2 text-sm font-semibold text-on-accent shadow-[0_8px_24px_-10px] shadow-mint-400/80 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {requesting ? 'Requesting…' : 'Analyze with Stockfish'}
           </button>

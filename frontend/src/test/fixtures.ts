@@ -2,6 +2,8 @@
 import type {
   AnalysisState,
   AnalyzeScope,
+  BoardEvaluation,
+  BoardMoveAnalysis,
   FormReport,
   GameDetail,
   GameList,
@@ -22,6 +24,7 @@ const meta = {
   refresh_error: null,
   as_of: '2026-10-20T12:00:00Z',
   last_successful_update: '2026-10-20T12:00:00Z',
+  time_class: 'rapid' as const,
 };
 
 export const overview: Overview = {
@@ -265,7 +268,6 @@ export function gameDetail(
 export const formReport: FormReport = {
   username: 'example_player',
   period,
-  time_class: 'rapid',
   games_total: 5,
   games_analyzed: 4,
   games_queued: 1,
@@ -414,4 +416,39 @@ export const analyzeScope: AnalyzeScope = {
   already_analyzed: 4,
   queued: 1,
   pending: 1,
+};
+
+const boardEngine = { name: 'Stockfish', version: '16.0', depth: 12 };
+const boardStart = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+const boardAfterE4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
+
+export const boardEvaluation: BoardEvaluation = {
+  fen: boardStart,
+  turn: 'white',
+  status: 'ongoing',
+  eval_cp: 35,
+  mate: null,
+  best_move_uci: 'e2e4',
+  best_move_san: 'e4',
+  engine: boardEngine,
+};
+
+export const boardMove: BoardMoveAnalysis = {
+  fen_before: boardStart,
+  fen_after: boardAfterE4,
+  turn: 'white',
+  move_number: 1,
+  san: 'e4',
+  uci: 'e2e4',
+  eval_before_cp: 35,
+  eval_after_cp: 20,
+  mate_after: null,
+  cp_loss: 0,
+  classification: 'best',
+  best_move_uci: 'e2e4',
+  best_move_san: 'e4',
+  best_move_after_uci: 'e7e5',
+  best_move_after_san: 'e5',
+  status_after: 'ongoing',
+  engine: boardEngine,
 };

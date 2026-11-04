@@ -7,18 +7,19 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.schemas.overview import Period
+from app.schemas.overview import Period, TimeClassOut
 
 DataStatusOut = Literal["fresh", "partial", "stale"]
 
 
 class DatasetMeta(BaseModel):
-    """Freshness and completeness shared by all player endpoints."""
+    """Freshness, completeness and selected scope shared by all player endpoints."""
 
     data_status: DataStatusOut
     refresh_error: str | None
     as_of: datetime
     last_successful_update: datetime
+    time_class: TimeClassOut = Field(description="Selected time class; 'all' combines them.")
 
 
 class RatingPoint(BaseModel):

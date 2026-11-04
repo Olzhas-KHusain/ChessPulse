@@ -34,7 +34,7 @@ export function BoardMotif() {
               <div
                 key={index}
                 className={`aspect-square ${
-                  highlighted ? 'bg-mint-400/70' : light ? 'bg-chalk-100/10' : 'bg-board-800'
+                  highlighted ? 'bg-mint-400/70' : light ? 'bg-square-light' : 'bg-square-dark'
                 }`}
               />
             );
@@ -48,7 +48,7 @@ export function BoardMotif() {
       </div>
       <div className="absolute -bottom-5 -left-3 rounded-2xl border border-white/10 bg-board-850/90 px-4 py-3 shadow-lift backdrop-blur sm:-left-6">
         <p className="text-[10px] uppercase tracking-[0.18em] text-chalk-500">Built for</p>
-        <p className="mt-1 font-display text-lg leading-none text-chalk-50">Rapid · 30 days</p>
+        <p className="mt-1 font-display text-lg leading-none text-chalk-50">All time classes</p>
       </div>
     </div>
   );

@@ -5,11 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Rapid performance of a Chess.com player over the last 30 days: results, rating trend, openings and opponents."
+      content="ChessPulse turns Chess.com games into clear reports and offers a free analysis board."
     />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="dark light" />
     <meta name="theme-color" content="#05080c" />
-    <title>ChessPulse — Rapid analytics</title>
+    <title>ChessPulse — Chess analytics and free analysis board</title>
+    <script>
+      // Apply the saved theme before the first paint to avoid a dark flash.
+      (function () {
+        try {
+          var saved = localStorage.getItem('chesspulse-theme');
+          document.documentElement.dataset.theme = saved === 'light' ? 'light' : 'dark';
+        } catch (error) {
+          document.documentElement.dataset.theme = 'dark';
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

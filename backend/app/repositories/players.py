@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from app.models import Player, Provider
+from app.models import Player, Provider, TimeClass
 from app.repositories._batching import chunked, require_lowercase
 
 
@@ -115,11 +115,23 @@ class PlayerRepository:
         player.username = new_username
         self._session.flush()
 
-    def set_current_rapid_rating(
-        self, player_id: int, rating: int | None, observed_at: datetime | None
+    def set_current_rating(
+        self,
+        player_id: int,
+        time_class: TimeClass,
+        rating: int | None,
+        observed_at: datetime | None,
     ) -> None:
-        """Store the provider's current Rapid rating (or clear it when unavailable)."""
+        """Store the provider's current rating for one time class.
+
+        Unknown results never erase a previous value; ``rating=None`` clears the
+        stored one only when the section confirms the class is unrated.
+        """
         player = self._session.get_one(Player, player_id)
-        player.current_rapid_rating = rating
-        player.current_rapid_rating_at = observed_at
+        setattr(player, f"current_{time_class.value}_rating", rating)
+        setattr(
+            player,
+            f"current_{time_class.value}_rating_at",
+            observed_at if rating is not None else None,
+        )
         self._session.flush()

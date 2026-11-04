@@ -30,17 +30,10 @@ from app.schemas.breakdowns import (
     RatingPoint,
 )
 from app.schemas.overview import Period
+from app.services.errors import InvalidParameterError
+from app.services.scope import DEFAULT_SCOPE, Scope
 
 MAX_LIMIT = 100
-
-
-class InvalidParameterError(ValueError):
-    """A query parameter is syntactically valid but violates a documented rule."""
-
-    def __init__(self, parameter: str, message: str) -> None:
-        super().__init__(message)
-        self.parameter = parameter
-        self.message = message
 
 
 class BreakdownService:
@@ -50,19 +43,25 @@ class BreakdownService:
         self._games = GameRepository(session)
 
     def _load(
-        self, username: str, now: datetime, window: AnalysisWindow
+        self, username: str, now: datetime, window: AnalysisWindow, scope: Scope
     ) -> tuple[DatasetStatus, Player, list[GameRow]]:
         status = self._cache.ensure_dataset(username, now)
-        rows = self._games.list_breakdown_rows(status.player_id, start=window.start, end=window.end)
+        rows = self._games.list_breakdown_rows(
+            status.player_id,
+            start=window.start,
+            end=window.end,
+            time_class=scope.time_class,
+        )
         return status, self._session.get_one(Player, status.player_id), rows
 
     @staticmethod
-    def _meta(status: DatasetStatus, now: datetime) -> dict[str, object]:
+    def _meta(status: DatasetStatus, now: datetime, scope: Scope) -> dict[str, object]:
         return {
             "data_status": status.data_status.value,
             "refresh_error": status.refresh_error,
             "as_of": now,
             "last_successful_update": status.last_successful_update,
+            "time_class": scope.time_class_value,
         }
 
     def rating_history(
@@ -71,9 +70,11 @@ class BreakdownService:
         now: datetime,
         from_: datetime | None = None,
         to: datetime | None = None,
+        *,
+        scope: Scope = DEFAULT_SCOPE,
     ) -> RatingHistoryResponse:
-        window = _sub_window(analysis_window(now), from_, to)
-        status, player, rows = self._load(username, now, window)
+        window = _sub_window(analysis_window(now, scope.days), from_, to)
+        status, player, rows = self._load(username, now, window, scope)
         history = rating_history(
             rows, dataset_complete=status.data_status is not DataStatus.PARTIAL
         )
@@ -88,15 +89,21 @@ class BreakdownService:
             games_considered=history.games_considered,
             games_without_rating=history.games_without_rating,
             duplicates_removed=history.duplicates_removed,
-            **self._meta(status, now),
+            **self._meta(status, now, scope),
         )
 
     def openings(
-        self, username: str, now: datetime, sort: GroupSort, limit: int
+        self,
+        username: str,
+        now: datetime,
+        sort: GroupSort,
+        limit: int,
+        *,
+        scope: Scope = DEFAULT_SCOPE,
     ) -> OpeningsResponse:
         _check_limit(limit)
-        window = analysis_window(now)
-        status, player, rows = self._load(username, now, window)
+        window = analysis_window(now, scope.days)
+        status, player, rows = self._load(username, now, window, scope)
         groups = sort_groups(group_openings(rows), sort, _opening_name)
         return OpeningsResponse(
             username=player.username,
@@ -113,15 +120,21 @@ class BreakdownService:
                 )
                 for g in groups[:limit]
             ],
-            **self._meta(status, now),
+            **self._meta(status, now, scope),
         )
 
     def opponents(
-        self, username: str, now: datetime, sort: GroupSort, limit: int
+        self,
+        username: str,
+        now: datetime,
+        sort: GroupSort,
+        limit: int,
+        *,
+        scope: Scope = DEFAULT_SCOPE,
     ) -> OpponentsResponse:
         _check_limit(limit)
-        window = analysis_window(now)
-        status, player, rows = self._load(username, now, window)
+        window = analysis_window(now, scope.days)
+        status, player, rows = self._load(username, now, window, scope)
         groups = sort_groups(group_opponents(rows), sort, _opponent_name)
         items: list[OpponentItem] = []
         for g in groups[:limit]:
@@ -141,7 +154,7 @@ class BreakdownService:
             sort=sort.value,
             total_groups=len(groups),
             items=items,
-            **self._meta(status, now),
+            **self._meta(status, now, scope),
         )
 
 
@@ -181,6 +194,6 @@ def _sub_window(
     end = min(window.end, to) if to else window.end
     if start >= end:
         raise InvalidParameterError(
-            "from", "from must be earlier than to and inside the 30-day period"
+            "from", "from must be earlier than to and inside the selected period"
         )
     return AnalysisWindow(start=start, end=end)

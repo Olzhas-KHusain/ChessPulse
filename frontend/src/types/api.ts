@@ -6,6 +6,13 @@
 export type DataStatus = 'fresh' | 'partial' | 'stale';
 export type PlayerOutcome = 'win' | 'loss' | 'draw' | 'unknown';
 export type GroupSort = 'games' | 'win_rate' | 'name';
+export type TimeClass = 'rapid' | 'blitz' | 'bullet' | 'daily' | 'all';
+
+/** Which time class and how many days one report covers. */
+export interface Scope {
+  timeClass: TimeClass;
+  days: number;
+}
 
 export interface Period {
   start: string;
@@ -18,6 +25,7 @@ export interface DatasetMeta {
   refresh_error: string | null;
   as_of: string;
   last_successful_update: string;
+  time_class: TimeClass;
 }
 
 export interface Streak {
@@ -34,6 +42,7 @@ export interface CurrentRating {
 export interface Overview {
   username: string;
   period: Period;
+  time_class: TimeClass;
   games_count: number;
   wins: number;
   losses: number;
@@ -248,7 +257,6 @@ export interface FormLeak {
 export interface FormReport extends DatasetMeta {
   username: string;
   period: Period;
-  time_class: string;
   games_total: number;
   games_analyzed: number;
   games_queued: number;
@@ -269,9 +277,55 @@ export interface FormReport extends DatasetMeta {
 
 export interface AnalyzeScope {
   username: string;
-  time_class: string;
+  time_class: TimeClass;
   games_total: number;
   already_analyzed: number;
   queued: number;
   pending: number;
+}
+
+/** Free analysis board (independent of any stored player dataset). */
+export type BoardStatus =
+  | 'ongoing'
+  | 'checkmate'
+  | 'stalemate'
+  | 'insufficient_material'
+  | 'seventyfive_moves'
+  | 'fivefold_repetition';
+
+export interface BoardEngine {
+  name: string;
+  version: string;
+  depth: number;
+}
+
+export interface BoardEvaluation {
+  fen: string;
+  turn: 'white' | 'black';
+  status: BoardStatus;
+  eval_cp: number;
+  mate: number | null;
+  best_move_uci: string | null;
+  best_move_san: string | null;
+  engine: BoardEngine;
+}
+
+export interface BoardMoveAnalysis {
+  fen_before: string;
+  fen_after: string;
+  turn: 'white' | 'black';
+  move_number: number;
+  san: string;
+  uci: string;
+  eval_before_cp: number;
+  eval_after_cp: number;
+  mate_after: number | null;
+  cp_loss: number;
+  classification: MoveClassification;
+  best_move_uci: string | null;
+  best_move_san: string | null;
+  best_move_after_uci: string | null;
+  best_move_after_san: string | null;
+  status_after: BoardStatus;
+  engine: BoardEngine;
 }

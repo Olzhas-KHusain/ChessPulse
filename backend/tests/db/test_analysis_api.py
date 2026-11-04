@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.engine.uci import EngineIdentity, Evaluation
 from app.engine.worker import run_once
-from app.models import AnalysisJob, AnalysisJobStatus, GameAnalysis
+from app.models import AnalysisJob, AnalysisJobStatus, GameAnalysis, TimeClass
 from app.providers.types import ArchiveMonth
 from tests.db.conftest import Client
 from tests.ingestion_helpers import NOW, OWNER, FakeProvider, game
@@ -89,6 +89,27 @@ def test_unknown_game_has_no_analysis(client: Client) -> None:
     response = api.get(f"{BASE}/live:does-not-exist/analysis")
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "GAME_NOT_FOUND"
+
+
+def test_analysis_scope_selects_time_class(client: Client) -> None:
+    provider = FakeProvider(
+        months={
+            OCT: [
+                game(
+                    NOW - 5 * timedelta(days=1),
+                    game_id="live:1",
+                    pgn=GOOD_PGN,
+                    time_class=TimeClass.BLITZ,
+                )
+            ]
+        }
+    )
+    api = client(provider)
+    assert api.get(BASE).status_code == 200  # ingests the dataset
+    url = f"{BASE}/live:1/analysis"
+    assert api.get(url).status_code == 404  # default scope is Rapid
+    body = api.get(url, params={"time_class": "blitz"}).json()
+    assert body["status"] == "missing"
 
 
 def test_job_moves_to_failed_when_the_pgn_is_missing(

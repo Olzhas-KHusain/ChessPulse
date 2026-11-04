@@ -10,14 +10,40 @@ Status: implemented (Issue 9). Code: `frontend/src/`.
 | `services/chesspulseApi.ts` | The only module calling `fetch`; maps the error envelope to `ApiError` (`status`, `code`, `retryAfterSeconds`); network failure → `NETWORK_ERROR` |
 | `hooks/useApi.ts` | Loading / success / error state with request cancellation (`AbortController`) |
 | `components/StateViews.tsx` | Loading, error, empty views; `DataStatusBanner` for stale/partial data |
-| `features/player` | Search form (validation mirrors the backend rule) and dashboard with tabs |
-| `features/overview`, `rating-history`, `openings`, `games` | Section views |
+| `features/player` | Search form (validation mirrors the backend rule), scope selector (`time_class` + `days`) and dashboard with tabs |
+| `features/overview`, `rating-history`, `openings`, `games` | Section views; every request carries the selected scope |
 | `features/analysis` | Opt-in Stockfish review of one game: request, poll, accuracy cards, key moments |
+| `features/board` | Free board: piece editor, legal-move play, engine evaluation and move classification |
+| `features/theme` | Dark/light toggle persisted in `localStorage` (`chesspulse-theme`) |
 | `utils/format.ts` | Formatting; `null` → `—` with screen-reader text "not available" |
 
-No router library: the dashboard uses an accessible tab list (arrow keys, Home/End).
-The overview is requested first (it refreshes the server cache); other tabs load only
-when opened, so they reuse the refreshed dataset instead of racing it.
+No router library: the header switches between `Analytics` and `Free board`, and the
+dashboard uses an accessible tab list (arrow keys, Home/End). The overview is requested
+first (it refreshes the server cache); other tabs load only when opened, so they reuse
+the refreshed dataset instead of racing it. The selected player and scope are preserved
+when switching views.
+
+## Scope
+
+`ScopeSelect` exposes `time_class` (`rapid`, `blitz`, `bullet`, `daily`, `all`) and
+`days` (7/30/90/180/365). `DEFAULT_SCOPE` is Rapid/30 days, matching the pre-scaling
+API. Changing either value resets every panel to its loading state and reissues the
+requests; no panel recomputes metrics client-side.
+
+## Free board
+
+The editor stores an 8×8 piece grid, so intermediate setups (for example one king) are
+allowed; the FEN and castling rights are derived from the placement, and en passant is
+preserved from a server position. Legal moves and check detection come from `chess.js`
+in the browser; the backend remains authoritative for evaluation, centipawn loss and
+classification. Every request goes to `/api/v1/board/evaluate` or `/api/v1/board/move`.
+
+## Theme
+
+The default is dark. `html[data-theme='light']` overrides the CSS tokens, so every
+component follows without per-component light variants. An inline script in
+`index.html` applies the saved theme before first paint to avoid a flash; the toggle in
+the header updates `data-theme`, the `theme-color` meta tag and `localStorage`.
 
 ## Data honesty rules
 

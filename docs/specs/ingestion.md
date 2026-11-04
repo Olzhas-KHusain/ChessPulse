@@ -1,13 +1,15 @@
 # Game Ingestion and Eligibility
 
-Status: implemented (Issue 4). Code: `app/analytics/window.py`,
-`app/services/eligibility.py`, `app/services/ingestion.py`.
+Status: implemented (Issue 4; extended for all time classes and the configurable
+dataset window). Code: `app/analytics/window.py`, `app/services/eligibility.py`,
+`app/services/ingestion.py`, `app/services/scope.py`.
 
-## Analysis window (single shared definition)
+## Dataset window (single shared definition)
 
-`analysis_window(now)` → `[now − 30 days, now)` in UTC: start **inclusive**, end
-**exclusive**. Naive datetimes are rejected. All filtering and, later, all API
-responses must use this function.
+`analysis_window(now, days)` → `[now − days, now)` in UTC: start **inclusive**, end
+**exclusive**. Naive datetimes are rejected. Ingestion always uses
+`DATASET_WINDOW_DAYS` (default 90); read endpoints call the same function with the
+requested `days` (7/30/90/180/365), which can never exceed the stored window.
 
 ## Eligibility rule
 
@@ -15,17 +17,19 @@ A normalized provider game enters the analytics dataset only if:
 
 | # | Rule | Exclusion reason |
 |---|------|------------------|
-| 1 | `time_class == "rapid"` (provider classification; `time_control` text is never used to infer it) | `not_rapid` |
-| 2 | `rules` present … | `rules_unverified` |
-| 3 | … and equal to `chess` (variants have separate ratings) | `non_standard_variant` |
-| 4 | `played_at` (game end time) inside the window | `outside_window` |
+| 1 | `rules` present … | `rules_unverified` |
+| 2 | … and equal to `chess` (variants have separate ratings) | `non_standard_variant` |
+| 3 | `played_at` (game end time) inside the dataset window | `outside_window` |
+
+Every standard class is stored. A report selects one class (or all classes) at read
+time through `app/services/scope.py`; there is no per-class dataset or cache key.
 
 Completion: PubAPI monthly archives contain finished games only, so archived games
 are complete. A game whose result cannot be classified is kept with result
 `unknown`; it is never counted as a loss.
 
 Records the provider could not normalize are excluded earlier with the reasons listed
-in `chess-com-provider.md` (missing identifier, missing end time, unknown time class,
+in `chess-com-provider.md` (missing identifier, missing end time, `unknown_time_class`,
 missing participant, …). A game present in two monthly archives is stored once
 (`duplicate_across_archives`).
 
@@ -36,8 +40,10 @@ missing participant, …). A game present in two monthly archives is stored once
 1. Profile. A confirmed missing player or an outage raises `ProviderError`; nothing is
    written. A profile whose stable `player_id` belongs to a stored player with another
    username is treated as a confirmed rename: the stored row is renamed.
-2. Stats. Failure is tolerated (`report.stats_error`); the previous rating is kept.
-3. Archive list → months overlapping the window (one-day margin).
+2. Stats. Failure is tolerated (`report.stats_error`); the previous ratings are kept.
+   All four class ratings are persisted independently: a missing section keeps its
+   stored value and is reported as `chess_<class>_last_missing`.
+3. Archive list → months overlapping `DATASET_WINDOW_DAYS` (one-day margin).
 4. Each month is fetched independently. A failed month is recorded in
    `report.months_failed` and in `cache_metadata` as `failed`, keeping the previous
    `last_success_at`; other months continue.
@@ -56,3 +62,5 @@ also logged; individual excluded payloads are not stored.
 - Persisted games are never deleted by a failed or partial refresh.
 - TTL / freshness decisions (`expires_at`) are left to the cache issue; ingestion only
   records what happened.
+- The stored window is a single cache entry per player; the read scope never causes a
+  different upstream fetch.

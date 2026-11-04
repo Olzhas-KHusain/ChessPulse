@@ -47,7 +47,7 @@ and to 409 after the cross-game form report.
 | `current_rating` | 756 (`provider_stats`) |
 | `data_status` | `fresh` |
 
-Ingestion log for the same refresh: `eligible_games=43`,
+Ingestion log for the same refresh (pre-scaling run): `eligible_games=43`,
 `excluded={'outside_window': 21, 'not_rapid': 58}`, `months_failed={}`.
 
 Browser walkthrough (same player): rating history chart and its table alternative,
@@ -120,7 +120,7 @@ analytics.
 | - | --------- | ------ | -------- |
 | 1 | Search without registration | ✅ | No auth anywhere; `App.tsx`, API |
 | 2 | Player resolved or clear error | ✅ | 400 / 404 / 502–504 envelope (`api-overview.md`) |
-| 3 | Only eligible Rapid games, rolling 30 days | ✅ | `eligibility.py`, `window.py`, boundary tests, live `excluded` counts |
+| 3 | Only eligible standard-chess games in the selected scope (`time_class` + `days`) | ✅ | `eligibility.py`, `window.py`, `scope.py`, boundary tests, live `excluded` counts |
 | 4 | Correct counts and win rate | ✅ | analytics unit tests + E2E hand calculation + live overview |
 | 5 | Streaks per documented rules | ✅ | `analytics/overview.py`, tests |
 | 6 | Rating observations without fabrication | ✅ | `rating_history`, tests; semantics labelled |
@@ -168,3 +168,25 @@ ruff 0.17.1, mypy 2.4.0. Engine: Stockfish 19 (external binary, not a Python dep
 Frontend: React 19.2, Vite 7.3.7, TypeScript 5.9, Tailwind CSS 4.1, Recharts 3.2,
 Vitest 4.1.12, ESLint 9.35, Prettier 3.6. Exact versions are in
 `frontend/package-lock.json` (committed).
+
+## 9. Scaling, free board and theme verification (2026-11-05)
+
+Scope: all standard time classes with a selectable 7–365 day window, the free analysis
+board and the dark/light theme. Environment: Windows 11, Python 3.12.10,
+Node 24.22.0, PostgreSQL 16.9 in Docker Compose on port 55432, Docker 29.9.1.
+
+| Check | Command | Result |
+| ----- | ------- | ------ |
+| Backend lint / format / types | `ruff check app tests`, `ruff format --check app tests`, `mypy app` | ✅ clean (110 files formatted, 78 typed) |
+| Full backend suite, with PostgreSQL | `pytest -q` | ✅ **443 passed** |
+| Migrations on the development database | `alembic upgrade head`, `alembic current` | ✅ `0004 (head)` |
+| Frontend types / lint | `npm run typecheck`, `npm run lint` | ✅ clean |
+| Frontend unit/component tests | `npm test` | ✅ **37 passed** (5 files) |
+| Frontend production build | `npm run build` | ✅ built; one 717.23 kB chunk (213.34 kB gzip) → warning only |
+| Composed stack | `docker compose up -d --build --wait` | ✅ app, worker and db healthy; `/health` `200` |
+| Playwright e2e (7 specs) | `npx playwright test` | ✅ **7 passed**: search, tabs, games, analysis, form, board, theme |
+| Free board against real Stockfish | `BoardAnalysisService.evaluate/analyze_move` | ✅ start `+0.32`, `e2e4` classified `best`, best reply `c5` |
+
+Known gaps at this date: no live cloud deployment yet (no provider credentials in the
+build environment); AWS phone verification is still pending on the user side. CI and the
+GHCR image build are already green on the deploy commit.

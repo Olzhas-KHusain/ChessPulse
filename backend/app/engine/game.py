@@ -57,50 +57,50 @@ class Engine(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
-class _PositionEval:
+class PositionEval:
     cp: int | None  # White's perspective; None only for an engine mate score
     mate: int | None  # White's perspective; positive = White mates
     best_move_uci: str | None
 
 
-def _white_perspective(board: chess.Board, evaluation: Evaluation) -> _PositionEval:
+def white_perspective(board: chess.Board, evaluation: Evaluation) -> PositionEval:
     sign = 1 if board.turn == chess.WHITE else -1
-    return _PositionEval(
+    return PositionEval(
         cp=None if evaluation.cp is None else sign * evaluation.cp,
         mate=None if evaluation.mate is None else sign * evaluation.mate,
         best_move_uci=evaluation.best_move,
     )
 
 
-def _terminal_eval(board: chess.Board) -> _PositionEval | None:
+def terminal_eval(board: chess.Board) -> PositionEval | None:
     """Evaluations that need no engine call."""
     if board.is_checkmate():
         # The side to move is mated, so White is winning iff Black is to move.
         white_is_winning = board.turn == chess.BLACK
-        return _PositionEval(
+        return PositionEval(
             cp=MATE_CP if white_is_winning else -MATE_CP,
             mate=None,
             best_move_uci=None,
         )
     if board.is_stalemate() or board.is_insufficient_material():
-        return _PositionEval(cp=0, mate=None, best_move_uci=None)
+        return PositionEval(cp=0, mate=None, best_move_uci=None)
     return None
 
 
-def _evaluate(board: chess.Board, engine: Engine) -> _PositionEval:
-    terminal = _terminal_eval(board)
+def evaluate_board(board: chess.Board, engine: Engine) -> PositionEval:
+    terminal = terminal_eval(board)
     if terminal is not None:
         return terminal
-    return _white_perspective(board, engine.evaluate(board.fen()))
+    return white_perspective(board, engine.evaluate(board.fen()))
 
 
-def _score_cp(evaluation: _PositionEval) -> int:
+def score_cp(evaluation: PositionEval) -> int:
     if evaluation.mate is not None:
         return MATE_CP if evaluation.mate > 0 else -MATE_CP
     return evaluation.cp or 0
 
 
-def _best_move_san(board: chess.Board, uci: str | None) -> str | None:
+def best_move_san(board: chess.Board, uci: str | None) -> str | None:
     if not uci:
         return None
     try:
@@ -140,9 +140,9 @@ def analyse_game(
     if not moves:
         raise AnalysisError("no_moves")
 
-    evaluations: list[_PositionEval] = []
+    evaluations: list[PositionEval] = []
     for index in range(len(moves) + 1):
-        evaluations.append(_evaluate(board, engine))
+        evaluations.append(evaluate_board(board, engine))
         if index < len(moves):
             board.push(moves[index])
 
@@ -162,8 +162,8 @@ def analyse_game(
         color = "white" if mover_is_white else "black"
         sign = 1 if mover_is_white else -1
 
-        before_cp = _score_cp(before) * sign
-        after_cp = _score_cp(after) * sign
+        before_cp = score_cp(before) * sign
+        after_cp = score_cp(after) * sign
         loss = centipawn_loss(before_cp, after_cp)
         played_best = before.best_move_uci == move.uci()
 
@@ -174,11 +174,11 @@ def analyse_game(
                 "color": color,
                 "san": san_board.san(move),
                 "uci": move.uci(),
-                "eval_before_cp": _score_cp(before),
-                "eval_cp": _score_cp(after),
+                "eval_before_cp": score_cp(before),
+                "eval_cp": score_cp(after),
                 "mate": after.mate,
                 "best_move_uci": before.best_move_uci,
-                "best_move_san": _best_move_san(san_board, before.best_move_uci),
+                "best_move_san": best_move_san(san_board, before.best_move_uci),
                 "cp_loss": loss,
                 "classification": classify(loss, played_best_move=played_best),
             }

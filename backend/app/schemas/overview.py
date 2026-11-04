@@ -7,6 +7,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+TimeClassOut = Literal["rapid", "blitz", "bullet", "daily", "all"]
+
 
 class Period(BaseModel):
     start: datetime = Field(description="Window start, inclusive (UTC).")
@@ -20,13 +22,14 @@ class StreakOut(BaseModel):
 
 
 class CurrentRating(BaseModel):
-    """The player's current Rapid rating from the provider's player statistics.
+    """The player's current rating in the selected time class, from provider stats.
 
-    Not derived from any game; per-game ratings are exposed by other endpoints."""
+    Not derived from any game; per-game ratings are exposed by other endpoints.
+    ``time_class="all"`` has no single current rating, so the field is null."""
 
     rating: int
     as_of: datetime | None = Field(
-        description="Provider timestamp of the last rated Rapid game behind this value."
+        description="Provider timestamp of the last rated game behind this value."
     )
     source: Literal["provider_stats"] = "provider_stats"
 
@@ -34,7 +37,8 @@ class CurrentRating(BaseModel):
 class OverviewResponse(BaseModel):
     username: str
     period: Period
-    games_count: int = Field(description="Eligible Rapid games in the period.")
+    time_class: TimeClassOut = Field(description="Selected time class; 'all' combines them.")
+    games_count: int = Field(description="Eligible games of the selected class in the period.")
     wins: int
     losses: int
     draws: int

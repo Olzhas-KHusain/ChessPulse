@@ -6,7 +6,7 @@ from datetime import timedelta
 
 import pytest
 
-from app.models import GameResult
+from app.models import GameResult, TimeClass
 from app.providers.errors import ProviderError, ProviderErrorCode
 from app.providers.types import ArchiveMonth
 from tests.db.conftest import Client
@@ -44,6 +44,7 @@ def test_overview_contract(client: Client) -> None:
             "end": "2026-10-20T12:00:00Z",
             "timezone": "UTC",
         },
+        "time_class": "rapid",
         "games_count": 5,
         "wins": 3,
         "losses": 1,
@@ -149,3 +150,56 @@ def test_upstream_failure_without_cache(
     assert error["code"] == code.value
     assert "internal detail" not in response.text
     assert int(response.headers["Retry-After"]) == 300  # failure cooldown
+
+
+def _scoped_games() -> FakeProvider:
+    day = timedelta(days=1)
+    return FakeProvider(
+        rapid_rating=1523,
+        blitz_rating=1400,
+        months={
+            OCT: [
+                game(NOW - 5 * day, game_id="live:r1"),
+                game(NOW - 2 * day, game_id="live:b1", time_class=TimeClass.BLITZ),
+            ],
+            SEPT: [game(NOW - 40 * day, game_id="live:r2")],
+        },
+    )
+
+
+def test_scope_filters_time_class_and_period(client: Client) -> None:
+    c = client(_scoped_games())
+
+    rapid = c.get(URL).json()
+    assert rapid["time_class"] == "rapid"
+    assert rapid["games_count"] == 1  # the 40-day-old Rapid game is outside 30 days
+    assert rapid["current_rating"] == 1523
+
+    blitz = c.get(URL, params={"time_class": "blitz"}).json()
+    assert blitz["time_class"] == "blitz"
+    assert blitz["games_count"] == 1
+    assert blitz["current_rating"] == 1400
+
+    wide_rapid = c.get(URL, params={"days": 90}).json()
+    assert wide_rapid["games_count"] == 2  # both Rapid games, still no Blitz
+
+    everything = c.get(URL, params={"time_class": "all", "days": 90}).json()
+    assert everything["time_class"] == "all"
+    assert everything["games_count"] == 3
+    assert everything["current_rating"] is None  # no single rating across classes
+    assert everything["missing_sections"] == ["current_rating"]
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"time_class": "chess960"},
+        {"days": 31},  # not a published option
+        {"days": 180},  # larger than the stored 90-day dataset window
+        {"days": "week"},
+    ],
+)
+def test_invalid_scope_is_rejected(client: Client, params: dict[str, object]) -> None:
+    response = client(FakeProvider()).get(URL, params=params)
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "INVALID_PARAMETER"

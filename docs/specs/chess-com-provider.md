@@ -29,7 +29,7 @@ fixtures in `backend/tests/providers/fixtures/`.
 | Method | Path | Purpose |
 | ------ | ---- | ------- |
 | `get_profile` | `/pub/player/{username}` | Public profile, `player_id` |
-| `get_stats` | `/pub/player/{username}/stats` | Current Rapid rating (`chess_rapid.last`) |
+| `get_stats` | `/pub/player/{username}/stats` | Current per-class ratings (`chess_rapid`, `chess_blitz`, `chess_bullet`, `chess_daily`) |
 | `list_archive_months` | `/pub/player/{username}/games/archives` | Available monthly archives |
 | `get_month_archive` | `/pub/player/{username}/games/{YYYY}/{MM}` | Completed games ending in that month |
 
@@ -89,9 +89,12 @@ default.
 
 ### Stats
 
-Only `chess_rapid.last` is used. `rapid_section_present = False` means the player has
-no Rapid rating (unknown, not zero). `rating` must be an integer 0–10 000; `date`
-(epoch seconds) becomes `rapid_rating_at` and is dropped if the rating is invalid.
+Each of `chess_rapid`, `chess_blitz`, `chess_bullet` and `chess_daily` is read
+independently; a missing section means that class has no rating (unknown, not zero).
+`rating` must be an integer 0–10 000; `date` (epoch seconds) becomes the class's
+`*_rating_at` and is dropped if the rating is invalid. A missing section keeps the
+previously stored value and is reported as `chess_<class>_last_missing`; a present but
+non-dict section is reported the same way.
 
 ### Archive list
 
@@ -145,8 +148,9 @@ both codes were known). Unknown results are kept and never counted as losses.
 1. **Rating semantics.** The documentation does not say whether `white.rating` /
    `black.rating` is the pre-game or post-game rating. ChessPulse labels it "rating
    reported with the game" and must not present it as either (spec §6.6).
-2. **Variants.** Games keep their `rules`. Ingestion must persist only `rules == "chess"`
-   for Rapid analytics; `None` (missing) is treated as not verified standard chess.
+2. **Variants.** Games keep their `rules`. Ingestion persists only `rules == "chess"`
+   for every standard class (Rapid, Blitz, Bullet, Daily); `None` (missing) is treated
+   as not verified standard chess.
 3. **Username rules** are not published; the accepted pattern is a safe superset.
 4. **Renames** are rare per the documentation; a rename is detected by `player_id` when
    the profile is fetched and must be resolved by the ingestion service.

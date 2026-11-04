@@ -16,11 +16,13 @@ from fastapi.staticfiles import StaticFiles
 
 from app import __version__
 from app.api.v1.errors import register_api_error_handlers
-from app.api.v1.routers import health, players
+from app.api.v1.routers import board, health, players
 from app.core.config import ConfigurationError, Settings, get_settings
 from app.core.errors import register_error_handlers
 from app.core.logging import configure_logging
 from app.db.session import build_engine, build_session_factory
+from app.engine.runtime import stockfish_factory
+from app.services.board import BoardAnalysisService
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -40,8 +42,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        yield
-        engine.dispose()
+        try:
+            yield
+        finally:
+            app.state.board_service.close()
+            engine.dispose()
 
     app = FastAPI(
         title="ChessPulse API",
@@ -55,6 +60,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.engine = engine
     app.state.session_factory = build_session_factory(engine)
+    app.state.board_service = BoardAnalysisService(stockfish_factory(settings))
 
     app.add_middleware(
         CORSMiddleware,
@@ -68,6 +74,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # /health is an unversioned operational endpoint; business endpoints use /api/v1.
     app.include_router(health.router)
     app.include_router(players.router)
+    app.include_router(board.router)
 
     _static = Path(settings.static_dir).resolve() if settings.static_dir else None
     if _static is not None:

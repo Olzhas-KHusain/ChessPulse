@@ -1,11 +1,15 @@
-"""Fetch, filter, and persist a player's eligible Rapid games.
+"""Fetch, filter, and persist a player's eligible games.
+
+One run stores the last ``window_days`` days of standard-chess games of **every**
+time class (rapid, blitz, bullet, daily); reports narrow by class and period at read
+time, so switching scope never requires a new upstream fetch.
 
 Flow for one player (spec §12):
 
 1. Resolve the profile (a confirmed missing player or an outage propagates as
    ``ProviderError`` and nothing is written).
-2. Fetch the current Rapid rating; failure is tolerated and reported.
-3. List monthly archives and fetch only months overlapping the analysis window.
+2. Fetch the current ratings per time class; failure is tolerated and reported.
+3. List monthly archives and fetch only months overlapping the dataset window.
    A failed month does not stop the others; it is recorded as incomplete.
 4. Drop records the provider could not normalize and games that are not eligible
    (see ``eligibility.py``), counting every exclusion by reason.
@@ -24,8 +28,15 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from app.analytics.window import AnalysisWindow, analysis_window
-from app.models import CacheResourceType, CacheStatus, OpeningSource, PlayerColor, Provider
+from app.analytics.window import WINDOW_DAYS, AnalysisWindow, analysis_window
+from app.models import (
+    CacheResourceType,
+    CacheStatus,
+    OpeningSource,
+    PlayerColor,
+    Provider,
+    TimeClass,
+)
 from app.providers.base import GameDataProvider
 from app.providers.chess_com import select_archive_months
 from app.providers.errors import ProviderError
@@ -84,8 +95,10 @@ class GameIngestionService:
         self._openings = OpeningRepository(session)
         self._cache = CacheMetadataRepository(session)
 
-    def ingest_player(self, username: str, now: datetime) -> IngestionReport:
-        window = analysis_window(now)
+    def ingest_player(
+        self, username: str, now: datetime, *, window_days: int = WINDOW_DAYS
+    ) -> IngestionReport:
+        window = analysis_window(now, window_days)
         profile = self._provider.get_profile(username)
         try:
             report = self._ingest(profile, window, now)
@@ -172,8 +185,18 @@ class GameIngestionService:
         try:
             stats = self._provider.get_stats(username)
         except ProviderError as error:
-            return error.code.value  # keep the previously stored rating
-        self._players.set_current_rapid_rating(player_id, stats.rapid_rating, stats.rapid_rating_at)
+            return error.code.value  # keep the previously stored ratings
+        for time_class in TimeClass:
+            # A missing section means the player has never been rated in that class;
+            # keep whatever is stored rather than inventing a value.
+            if not getattr(stats, f"{time_class.value}_section_present"):
+                continue
+            self._players.set_current_rating(
+                player_id,
+                time_class,
+                getattr(stats, f"{time_class.value}_rating"),
+                getattr(stats, f"{time_class.value}_rating_at"),
+            )
         return None
 
     def _persist(self, player_id: int, username: str, games: list[ProviderGame]) -> None:
