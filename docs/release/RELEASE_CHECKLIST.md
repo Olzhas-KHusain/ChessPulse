@@ -195,7 +195,9 @@ request runs: backend `ruff` + `mypy` + `pytest`, frontend lint/typecheck/unit/b
 Playwright e2e against the composed stack, and the GHCR image build and push all pass.
 The only skipped job in the pull-request run is the deploy step, which runs on pushes.
 
-Known gaps at this date: no live cloud deployment yet (no provider credentials in the
-build environment); AWS phone verification is still pending on the user side. GitHub
-issues for the board and theme work are not created yet, and `#12`–`#15` still need the
-`e2e-test` label; both require repository write access that this environment lacks.
+Work tracking: issues `#24` (scaling), `#25` (free board) and `#26` (light theme) are
+created and closed; every Playwright-covered feature issue (`#12`–`#15`, `#22`, `#25`,
+`#26`) carries the `e2e-test` label.
+
+Known gap at this date: no live cloud deployment yet (no provider credentials in the
+build environment); AWS phone verification is still pending on the user side.
