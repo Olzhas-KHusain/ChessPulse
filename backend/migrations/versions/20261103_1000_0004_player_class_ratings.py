@@ -25,9 +25,7 @@ def upgrade() -> None:
         op.add_column("players", sa.Column(f"current_{name}_rating", sa.Integer(), nullable=True))
         op.add_column(
             "players",
-            sa.Column(
-                f"current_{name}_rating_at", sa.DateTime(timezone=True), nullable=True
-            ),
+            sa.Column(f"current_{name}_rating_at", sa.DateTime(timezone=True), nullable=True),
         )
         op.create_check_constraint(
             f"current_{name}_rating_non_negative",
@@ -43,9 +41,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     for name in _CLASSES:
-        op.drop_constraint(
-            f"current_{name}_rating_at_requires_rating", "players", type_="check"
-        )
+        op.drop_constraint(f"current_{name}_rating_at_requires_rating", "players", type_="check")
         op.drop_constraint(f"current_{name}_rating_non_negative", "players", type_="check")
         op.drop_column("players", f"current_{name}_rating_at")
         op.drop_column("players", f"current_{name}_rating")

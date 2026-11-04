@@ -104,7 +104,7 @@ class FakeProvider:
         if self.stats_error:
             raise self.stats_error
 
-        def rated(rating: int | None) -> int | None:
+        def rated(rating: int | None) -> datetime | None:
             return NOW if rating is not None else None
 
         return ProviderStats(
