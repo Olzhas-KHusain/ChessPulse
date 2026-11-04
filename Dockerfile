@@ -33,13 +33,14 @@ COPY backend/migrations ./migrations
 COPY backend/alembic.ini ./
 COPY backend/tests ./tests
 COPY --from=frontend /build/dist /app/static
-COPY backend/migrations ./migrations
-COPY backend/alembic.ini ./
 
 # Serve the built SPA + API from one process; migrations run in the entrypoint.
+# Set RUN_EMBEDDED_WORKER=1 on hosts that cannot run a second process (for
+# example a single Render free web service); Compose keeps its own worker.
 ENV STATIC_DIR=/app/static
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)" || exit 1
+    CMD python -c "import os, urllib.request; port = os.environ.get('PORT', '8000'); urllib.request.urlopen('http://127.0.0.1:' + port + '/health', timeout=4)" || exit 1
 
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000"]
+# PORT defaults to 8000 for Compose; PaaS hosts (Render) inject their own port.
+CMD ["sh", "-c", "alembic upgrade head && if [ \"$RUN_EMBEDDED_WORKER\" = \"1\" ]; then python -m app.worker & fi; exec uvicorn app.main:create_app --factory --host 0.0.0.0 --port \"${PORT:-8000}\""]

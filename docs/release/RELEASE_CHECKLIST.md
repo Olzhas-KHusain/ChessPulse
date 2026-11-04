@@ -189,6 +189,7 @@ Node 24.22.0, PostgreSQL 16.9 in Docker Compose on port 55432, Docker 29.9.1.
 | Composed stack | `docker compose up -d --build --wait` | ✅ app, worker and db healthy; `/health` `200` |
 | Playwright e2e (7 specs) | `npx playwright test` | ✅ **7 passed**: search, tabs, games, analysis, form, board, theme |
 | Free board against real Stockfish | `BoardAnalysisService.evaluate/analyze_move` | ✅ start `+0.32`, `e2e4` classified `best`, best reply `c5` |
+| Render free-plan entrypoint | container with `PORT=9000 RUN_EMBEDDED_WORKER=1` | ✅ uvicorn on port 9000, worker process running, `/health` `200` |
 
 CI (`.github/workflows/ci.yml`) is green on `611f7ad` for both the push and the pull
 request runs: backend `ruff` + `mypy` + `pytest`, frontend lint/typecheck/unit/build,

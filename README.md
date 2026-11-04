@@ -301,8 +301,11 @@ Deployment targets:
   Postgres service), frontend (lint, typecheck, Vitest, build), Playwright e2e
   against the composed stack, then build + push to GHCR and redeploy via a
   deploy hook on every pushed commit.
-- **PaaS**: `render.yaml` blueprint (see its notes about the paid database
-  plan) or any Docker-Compose capable host.
+- **PaaS**: `render.yaml` blueprint using Render's Free plans (web + PostgreSQL,
+  no paid features). Free limits: the service sleeps after 15 idle minutes, the
+  database is 1 GB and expires after 30 days. Render has no free worker plan, so
+  the blueprint sets `RUN_EMBEDDED_WORKER=1` and the container starts the analysis
+  worker alongside the API.
 - **AWS**: `infra/cloudformation.yml` provisions one free-tier `t3.micro` EC2
   instance with Docker and starts the whole compose stack; details and free-tier
   guardrails: `infra/README.md`.
