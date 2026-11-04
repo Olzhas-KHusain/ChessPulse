@@ -128,13 +128,16 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute the lowercase image reference
+        # GHCR rejects uppercase repository names; the GitHub owner may contain them.
+        run: echo "IMAGE=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/chesspulse" >> "$GITHUB_ENV"
       - uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/chesspulse:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/chesspulse:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Redeploy (Render / Railway deploy hook)
