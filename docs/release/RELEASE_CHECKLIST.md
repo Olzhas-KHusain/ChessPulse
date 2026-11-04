@@ -201,6 +201,20 @@ Work tracking: issues `#24` (scaling), `#25` (free board) and `#26` (light theme
 created and closed; every Playwright-covered feature issue (`#12`–`#15`, `#22`, `#25`,
 `#26`) carries the `e2e-test` label; `#27` tracks the live Render deployment.
 
-Known gap at this date: no live cloud deployment yet (waiting for the user to create the
-Render blueprint and share the service URL and deploy hook); AWS phone verification is
-still pending on the user side.
+Known gap at this date: none for the code itself — the project is deployed and verified on Render Free.
+
+## 10. Live deployment verification (2026-11-05)
+
+Target: `https://chesspulse-web.onrender.com` (Render Free web + Free PostgreSQL, blueprint-managed, commit `890e4d1`).
+Free-plan caveats: service spins down after 15 idle minutes (first request wakes it in ~50 s); free PostgreSQL expires 30 days after creation.
+
+| Check | Result |
+| ----- | ------ |
+| `GET /health` | ✅ `200`, `{"status":"ok",...,"environment":"production"}` |
+| `POST /api/v1/board/evaluate` (live Stockfish) | ✅ start `+33 cp`, best `e2e4` (e4), Stockfish 17.1 depth 12 |
+| `POST /api/v1/board/move` (live Stockfish) | ✅ `e2e4` classified `best`, `cp_loss: 0`, best reply `e7e6` |
+| Playwright e2e board + theme on public URL | ✅ 2/2 passed |
+| Playwright e2e full suite (search, tabs, games, analysis, form) | ⚠️ не пройдены на свелом инстансе — пустая БД, требуется успешный Refresh кэша из Chess.com; локально против заполненного compose-стека: 8/8 |
+| CI on `main` (`890e4d1`) | ✅ backend + frontend + Playwright e2e + GHCR build/push |
+| `RENDER_DEPLOY_HOOK` in GitHub Secrets | ✅ добавлен; пуши в `main` передеплоят сервис автоматически |
+
