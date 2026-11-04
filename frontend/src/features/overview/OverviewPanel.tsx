@@ -90,7 +90,13 @@ export function OverviewPanel({ overview, scope }: { overview: Overview; scope: 
       )}
 
       <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <HeroStat label="Games" value={formatNumber(overview.games_count)} />
+        <HeroStat
+          label="Games"
+          value={formatNumber(overview.games_count)}
+          hint={`${periodLabel(scope.days)} in UTC, through ${formatDateTime(
+            overview.period.end,
+          )}. Data refreshed ${formatDateTime(overview.last_successful_update)}.`}
+        />
         <HeroStat
           label="Win rate"
           value={formatPercent(overview.win_rate)}
@@ -108,6 +114,11 @@ export function OverviewPanel({ overview, scope }: { overview: Overview; scope: 
           hint={overview.current_streak ? 'Most recent games first' : undefined}
         />
       </dl>
+
+      <p className="text-xs leading-relaxed text-chalk-500">
+        Counts include every eligible game in the rolling UTC window that is present in the latest
+        successful refresh. Chess.com&apos;s own 30-day totals may update on a different schedule.
+      </p>
 
       <div className="grid gap-3 lg:grid-cols-[1.35fr_1fr]">
         <Panel className="p-4 sm:p-5">

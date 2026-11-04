@@ -87,5 +87,9 @@
 - `player_statistics` aggregate table (not needed yet; aggregates are computed per request).
 - Chess variants and arbitrary (non-published) date ranges; the published options are
   7/30/90/180/365 days within `DATASET_WINDOW_DAYS`.
+- Opening names come from Chess.com and describe the *resulting* position, so a game can
+  be named after a transposition rather than the moves actually played (for example the
+  Vienna after `1.e4 e5 2.Nc3 Nf6 3.f4` can be reported as King's Gambit Accepted +
+  Schallopp Defense).
 - Accounts, authentication, private Chess.com data.
 - Production monitoring and alerting beyond the container healthchecks.

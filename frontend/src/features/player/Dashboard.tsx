@@ -235,6 +235,10 @@ function OpeningsTab({
         </div>
         <SortSelect value={sort} onChange={setSort} />
       </div>
+      <p className="max-w-3xl text-xs leading-relaxed text-chalk-500">
+        Opening names and ECO codes come from Chess.com. They describe the resulting position, so a
+        game can be named after a transposition rather than the moves you played.
+      </p>
       <Section state={state} loadingLabel="Loading openings…">
         {(data) => (
           <>

@@ -175,30 +175,32 @@ Vitest 4.1.12, ESLint 9.35, Prettier 3.6. Exact versions are in
 ## 9. Scaling, free board and theme verification (2026-11-05)
 
 Scope: all standard time classes with a selectable 7–365 day window, the free analysis
-board and the dark/light theme. Environment: Windows 11, Python 3.12.10,
-Node 24.22.0, PostgreSQL 16.9 in Docker Compose on port 55432, Docker 29.9.1.
+board (with optional engine analysis) and the dark/light theme. Environment: Windows 11,
+Python 3.12.10, Node 24.22.0, PostgreSQL 16.9 in Docker Compose on port 55432,
+Docker 29.9.1.
 
 | Check | Command | Result |
 | ----- | ------- | ------ |
-| Backend lint / format / types | `ruff check app tests`, `ruff format --check app tests`, `mypy app` | ✅ clean (110 files formatted, 78 typed) |
+| Backend lint / format / types | `ruff check app tests`, `ruff format --check app tests`, `mypy app` | ✅ clean (110+ files formatted, typed) |
 | Full backend suite, with PostgreSQL | `pytest -q` | ✅ **443 passed** |
 | Migrations on the development database | `alembic upgrade head`, `alembic current` | ✅ `0004 (head)` |
 | Frontend types / lint | `npm run typecheck`, `npm run lint` | ✅ clean |
-| Frontend unit/component tests | `npm test` | ✅ **37 passed** (5 files) |
-| Frontend production build | `npm run build` | ✅ built; one 717.23 kB chunk (213.34 kB gzip) → warning only |
+| Frontend format | `npm run format:check` (prettier --check) | ✅ all files |
+| Frontend unit/component tests | `npm test` | ✅ **38 passed** (5 files) |
+| Frontend production build | `npm run build` | ✅ built; one ~720 kB chunk (~214 kB gzip) → warning only |
 | Composed stack | `docker compose up -d --build --wait` | ✅ app, worker and db healthy; `/health` `200` |
-| Playwright e2e (7 specs) | `npx playwright test` | ✅ **7 passed**: search, tabs, games, analysis, form, board, theme |
+| Playwright e2e (8 specs) | `npx playwright test` | ✅ **8 passed**: search, tabs, games, analysis, form, board (2), theme |
 | Free board against real Stockfish | `BoardAnalysisService.evaluate/analyze_move` | ✅ start `+0.32`, `e2e4` classified `best`, best reply `c5` |
 | Render free-plan entrypoint | container with `PORT=9000 RUN_EMBEDDED_WORKER=1` | ✅ uvicorn on port 9000, worker process running, `/health` `200` |
 
-CI (`.github/workflows/ci.yml`) is green on `611f7ad` for both the push and the pull
-request runs: backend `ruff` + `mypy` + `pytest`, frontend lint/typecheck/unit/build,
-Playwright e2e against the composed stack, and the GHCR image build and push all pass.
-The only skipped job in the pull-request run is the deploy step, which runs on pushes.
+CI (`.github/workflows/ci.yml`) is green on `77bbdd9` for the push run: backend `ruff` +
+`mypy` + `pytest`, frontend lint/typecheck/unit/build, Playwright e2e against the
+composed stack, and the GHCR image build and push all pass.
 
 Work tracking: issues `#24` (scaling), `#25` (free board) and `#26` (light theme) are
 created and closed; every Playwright-covered feature issue (`#12`–`#15`, `#22`, `#25`,
-`#26`) carries the `e2e-test` label.
+`#26`) carries the `e2e-test` label; `#27` tracks the live Render deployment.
 
-Known gap at this date: no live cloud deployment yet (no provider credentials in the
-build environment); AWS phone verification is still pending on the user side.
+Known gap at this date: no live cloud deployment yet (waiting for the user to create the
+Render blueprint and share the service URL and deploy hook); AWS phone verification is
+still pending on the user side.

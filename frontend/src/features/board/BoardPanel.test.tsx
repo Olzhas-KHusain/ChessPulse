@@ -40,6 +40,26 @@ describe('free board', () => {
     expect((screen.getByLabelText('Position FEN') as HTMLInputElement).value).toContain('4P3');
   });
 
+  it('turns analysis off and plays moves locally', () => {
+    const api = fakeApi();
+    render(<BoardPanel api={api} />);
+
+    const toggle = screen.getByRole('switch', { name: 'Engine analysis' });
+    fireEvent.click(toggle);
+
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    expect(screen.getByText('Analysis is off')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Evaluate position' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'e2 white pawn' }));
+    fireEvent.click(screen.getByRole('button', { name: 'e4' }));
+
+    expect(api.boardMove).not.toHaveBeenCalled();
+    expect(api.boardEvaluate).not.toHaveBeenCalled();
+    expect((screen.getByLabelText('Position FEN') as HTMLInputElement).value).toContain('4P3');
+    expect(screen.queryByText('Best')).toBeNull();
+  });
+
   it('edits arbitrary positions and explains an invalid setup', async () => {
     render(<BoardPanel api={fakeApi()} />);
 

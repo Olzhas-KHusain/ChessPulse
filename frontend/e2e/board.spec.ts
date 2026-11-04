@@ -48,3 +48,26 @@ test('evaluate a position, play a move and edit the board', async ({ page }) => 
   await expect(page.getByText('Playing', { exact: true })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
+
+test('turns engine analysis off and plays a move locally', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Free board' }).click();
+
+  const toggle = page.getByRole('switch', { name: 'Engine analysis' });
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await toggle.click();
+
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect(page.getByRole('heading', { name: 'Analysis is off' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Evaluate position' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'd2 white pawn' }).click();
+  await page.getByRole('button', { name: 'd4' }).click();
+
+  await expect(page.getByLabel('Position FEN')).toHaveValue(/3P4/);
+  await expect(page.getByText('Best', { exact: true })).toHaveCount(0);
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByRole('button', { name: 'Evaluate position' })).toBeVisible();
+});

@@ -1,12 +1,12 @@
-import { Chess, type Square } from 'chess.js';
+import { Chess, type Move, type Square } from 'chess.js';
 import { useMemo, useState } from 'react';
 
 import { Badge, Eyebrow, Panel } from '../../components/ui';
 import { ApiError, type ChesspulseApi } from '../../services/chesspulseApi';
-import type { BoardEvaluation, BoardMoveAnalysis } from '../../types/api';
+import type { BoardEvaluation } from '../../types/api';
 import { ChessBoard, type LastMove } from './ChessBoard';
 import { EvaluationCard } from './EvaluationCard';
-import { MoveList } from './MoveList';
+import { MoveList, type PlayedMove } from './MoveList';
 import { PiecePalette, type EditorTool } from './PiecePalette';
 import {
   explainFenError,
@@ -55,8 +55,9 @@ export function BoardPanel({ api }: BoardPanelProps) {
   const [selected, setSelected] = useState<Square | null>(null);
   const [targets, setTargets] = useState<Square[]>([]);
   const [lastMove, setLastMove] = useState<LastMove | null>(null);
+  const [analysisEnabled, setAnalysisEnabled] = useState(true);
   const [evaluation, setEvaluation] = useState<BoardEvaluation | null>(null);
-  const [moves, setMoves] = useState<BoardMoveAnalysis[]>([]);
+  const [moves, setMoves] = useState<PlayedMove[]>([]);
   const [history, setHistory] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,6 +122,10 @@ export function BoardPanel({ api }: BoardPanelProps) {
     }
 
     if (selected !== null && targets.includes(square)) {
+      if (!analysisEnabled) {
+        playLocalMove(selected, square);
+        return;
+      }
       const uci = moveUci(fen, selected, square);
       if (uci !== null) void analyzeMove(uci, selected, square);
       return;
@@ -145,7 +150,18 @@ export function BoardPanel({ api }: BoardPanelProps) {
     try {
       const result = await api.boardMove(fenBefore, uci);
       setPosition(positionFromFen(result.fen_after));
-      setMoves((current) => [...current, result]);
+      setMoves((current) => [
+        ...current,
+        {
+          fen_before: result.fen_before,
+          fen_after: result.fen_after,
+          turn: result.turn,
+          move_number: result.move_number,
+          san: result.san,
+          uci: result.uci,
+          analysis: result,
+        },
+      ]);
       setHistory((current) => [...current, fenBefore]);
       setEvaluation({
         fen: result.fen_after,
@@ -169,7 +185,48 @@ export function BoardPanel({ api }: BoardPanelProps) {
     }
   }
 
+  function playLocalMove(from: Square, to: Square) {
+    const fenBefore = fen;
+    let chess: Chess;
+    try {
+      chess = new Chess(fenBefore);
+    } catch {
+      return;
+    }
+    let move: Move | null = null;
+    try {
+      move = chess.move({ from, to, promotion: 'q' });
+    } catch {
+      return;
+    }
+    if (move === null) return;
+    const fenAfter = chess.fen();
+    const moveNumber = Number.parseInt(fenBefore.split(' ')[5] ?? '1', 10);
+    setPosition(positionFromFen(fenAfter));
+    setMoves((current) => [
+      ...current,
+      {
+        fen_before: fenBefore,
+        fen_after: fenAfter,
+        turn: move.color === 'w' ? 'white' : 'black',
+        move_number: Number.isNaN(moveNumber) ? 1 : moveNumber,
+        san: move.san,
+        uci: move.lan,
+        analysis: null,
+      },
+    ]);
+    setHistory((current) => [...current, fenBefore]);
+    setEvaluation(null);
+    setLastMove({ from, to });
+    setSelected(null);
+    setTargets([]);
+    setError(null);
+    setHint(null);
+    setNotice(null);
+  }
+
   async function evaluatePosition() {
+    if (!analysisEnabled) return;
     if (!validation.ok) {
       setHint(explainFenError(validation.error));
       return;
@@ -250,28 +307,40 @@ export function BoardPanel({ api }: BoardPanelProps) {
     setSelected(null);
     setTargets([]);
     setError(null);
+    const analysis = last?.analysis;
     setEvaluation(
-      last === undefined
+      !analysisEnabled || analysis == null
         ? null
         : {
             fen: previousFen,
-            turn: last.turn === 'white' ? 'black' : 'white',
-            status: last.status_after,
-            eval_cp: last.eval_after_cp,
-            mate: last.mate_after,
-            best_move_uci: last.best_move_after_uci,
-            best_move_san: last.best_move_after_san,
-            engine: last.engine,
+            turn: analysis.turn === 'white' ? 'black' : 'white',
+            status: analysis.status_after,
+            eval_cp: analysis.eval_after_cp,
+            mate: analysis.mate_after,
+            best_move_uci: analysis.best_move_after_uci,
+            best_move_san: analysis.best_move_after_san,
+            engine: analysis.engine,
           },
     );
   }
 
   function playBest() {
-    if (editing || busy || evaluation?.best_move_uci == null) return;
+    if (!analysisEnabled || editing || busy || evaluation?.best_move_uci == null) return;
     const uci = evaluation.best_move_uci;
     const from = uci.slice(0, 2) as Square;
     const to = uci.slice(2, 4) as Square;
     void analyzeMove(uci, from, to);
+  }
+
+  function toggleAnalysis() {
+    const next = !analysisEnabled;
+    setAnalysisEnabled(next);
+    if (!next) {
+      setEvaluation(null);
+      setError(null);
+      setHint(null);
+      setNotice(null);
+    }
   }
 
   function copyFen() {
@@ -382,6 +451,30 @@ export function BoardPanel({ api }: BoardPanelProps) {
                 ))}
               </div>
 
+              <button
+                type="button"
+                role="switch"
+                aria-checked={analysisEnabled}
+                aria-label="Engine analysis"
+                onClick={toggleAnalysis}
+                disabled={busy}
+                className="flex items-center gap-2 rounded-xl border border-white/10 bg-board-900/60 px-3 py-2 text-xs font-medium text-chalk-300 transition hover:border-white/20 hover:text-chalk-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span
+                  aria-hidden="true"
+                  className={`relative h-5 w-9 rounded-full transition-colors ${
+                    analysisEnabled ? 'bg-mint-400' : 'bg-board-700'
+                  }`}
+                >
+                  <span
+                    className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+                      analysisEnabled ? 'translate-x-4' : ''
+                    }`}
+                  />
+                </span>
+                Analysis {analysisEnabled ? 'on' : 'off'}
+              </button>
+
               {busy && (
                 <span role="status" className="text-xs text-chalk-400">
                   Analysing…
@@ -434,14 +527,27 @@ export function BoardPanel({ api }: BoardPanelProps) {
         </div>
 
         <div className="space-y-4">
-          <EvaluationCard
-            evaluation={evaluation}
-            busy={busy}
-            canPlayBest={!editing && validation.ok}
-            onEvaluate={() => void evaluatePosition()}
-            onPlayBest={playBest}
-          />
-          <MoveList moves={moves} busy={busy} onUndo={undo} />
+          {analysisEnabled ? (
+            <EvaluationCard
+              evaluation={evaluation}
+              busy={busy}
+              canPlayBest={!editing && validation.ok}
+              onEvaluate={() => void evaluatePosition()}
+              onPlayBest={playBest}
+            />
+          ) : (
+            <Panel className="p-4 sm:p-5">
+              <Eyebrow>Engine verdict</Eyebrow>
+              <h2 className="mt-1 font-display text-2xl tracking-tight text-chalk-50">
+                Analysis is off
+              </h2>
+              <p className="mt-3 text-sm leading-relaxed text-chalk-400">
+                Moves are played locally with legal-move checking. Turn analysis on to evaluate
+                positions, classify moves and see the best continuation.
+              </p>
+            </Panel>
+          )}
+          <MoveList moves={moves} busy={busy} analysisEnabled={analysisEnabled} onUndo={undo} />
         </div>
       </div>
     </section>
