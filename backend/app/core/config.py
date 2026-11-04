@@ -60,6 +60,39 @@ class Settings(BaseSettings):
     # Longest Retry-After / backoff delay we are willing to wait inside one request.
     upstream_max_retry_after_seconds: float = Field(default=10.0, ge=0, le=120)
 
+    # --- Cache policy -----------------------------------------------------------
+    # How long a successfully refreshed player dataset is served without contacting
+    # the provider. Chess.com documents that PubAPI data refreshes at most every 12 h.
+    cache_ttl_seconds: int = Field(default=12 * 3600, ge=60, le=7 * 24 * 3600)
+    # Minimum wait after a failed refresh before the next attempt (Retry-After wins
+    # when longer), so outages and rate limits are not hammered.
+    refresh_failure_cooldown_seconds: int = Field(default=300, ge=0, le=24 * 3600)
+    # How many days of standard-chess games (all time classes) one ingestion keeps.
+    # Monthly archives are fetched per month in this window, so a larger value means
+    # more upstream requests per refresh.
+    dataset_window_days: int = Field(default=90, ge=30, le=730)
+
+    # --- Engine analysis --------------------------------------------------------
+    # Absolute path to a Stockfish binary. Empty means "look for `stockfish` on PATH".
+    stockfish_path: str = ""
+
+    # --- Static frontend ---------------------------------------------------------
+    # Directory with the built frontend (Vite dist). Empty means "API only" (local
+    # development where Vite runs its own dev server); the Docker image sets it to
+    # serve the UI from the same process and port as the API.
+    static_dir: str = ""
+    # Fixed-depth profile. Depth 12 is fast enough for a background worker and
+    # deep enough to separate ordinary inaccuracies from real blunders.
+    analysis_depth: int = Field(default=12, ge=6, le=30)
+    analysis_threads: int = Field(default=1, ge=1, le=64)
+    analysis_hash_mb: int = Field(default=64, ge=16, le=4096)
+    analysis_move_timeout_seconds: float = Field(default=30.0, gt=0, le=600)
+    # Claims after which a repeatedly failing job stays failed until re-requested.
+    analysis_job_max_attempts: int = Field(default=3, ge=1, le=10)
+    analysis_worker_poll_seconds: float = Field(default=2.0, ge=0.1, le=60)
+    # A job left running longer than this is assumed to belong to a dead worker.
+    analysis_stale_job_minutes: int = Field(default=30, ge=1, le=24 * 60)
+
     @field_validator("database_url")
     @classmethod
     def _validate_database_url(cls, value: SecretStr) -> SecretStr:

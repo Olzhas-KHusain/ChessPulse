@@ -1,0 +1,91 @@
+# Known limitations and deferred work
+
+## Data and provider
+
+- **Freshness.** A player's dataset is cached for 12 h (`CACHE_TTL_SECONDS`); Chess.com
+  documents that its public data refreshes at most every 12 h (another passage says
+  24 h). Games finished after the last refresh appear only after the next one. Every
+  response carries `last_successful_update` and `data_status`.
+- **Rating semantics.** Game records do not document whether a rating is pre- or
+  post-game; ChessPulse labels it "reported with the game". The current rating comes
+  from the player's stats and is shown separately.
+- **Variants.** Only `rules == "chess"` games are analysed; Chess960 and other
+  variants, and games without a `rules` value, are excluded. Rapid, Blitz, Bullet and
+  Daily are all stored and selectable.
+- **Unknown results** are kept as `unknown`, excluded from the win rate, and they break
+  streaks (`streak_may_be_incomplete`).
+- **Openings** are identified by Chess.com's opening page slug. The display name is the
+  slug with a documented orthography table that restores apostrophes and hyphens
+  ("King's Pawn", "Caro-Kann", "Smith-Morra"); a name whose slug is not in the table is
+  shown with spaces where the standard spelling may need a hyphen. No external opening
+  database is used, and the provider's `Undefined` placeholder is treated as unknown.
+- **Renames.** Detected via `player_id` when the profile is fetched. Renaming into a
+  username already stored for another account (e.g. an opponent row) fails the refresh
+  (HTTP 500); expected to be extremely rare.
+- **Archive month time zone** is undocumented; neighbouring months are fetched with a
+  one-day margin.
+- **Live contract not observed** from the build environment; fixtures are synthetic.
+
+## Behaviour
+
+- **First load contention.** If a player has no cache yet and a refresh is already
+  running in another worker, other requests get `503 REFRESH_IN_PROGRESS` instead of
+  waiting. The UI avoids this by loading the overview first.
+- **Long refreshes.** A cold refresh makes up to 5 serial upstream requests; with
+  retries and Retry-After waits it can hold a worker thread for tens of seconds.
+- **No application-level rate limiting** (spec §10 lists 429 as optional). Upstream load
+  is bounded by caching, cooldowns and serial access only.
+- **Data retention.** Stored games are never deleted; a cleanup policy for games older
+  than the window is not implemented.
+- **PGN** is stored permanently when supplied (open decision, spec §20).
+- **Conditional requests** (`If-None-Match`) are not sent; validators are captured.
+
+## Engine analysis
+
+- **Fixed depth, one thread by default.** Depth 12 with one thread is chosen for a
+  responsive local worker; it can miss deep tactics that a longer search would find.
+  Changing the depth or hash/thread settings changes the cache key, so old results are
+  kept but not reused.
+- **Game accuracy is a mean**, not a weighted average. A game with many trivial moves and
+  one blunder therefore scores higher than a sharp game with the same blunder. The UI
+  labels it "mean move accuracy".
+- **No rating estimate.** Accuracy does not identify an Elo, and ChessPulse does not derive
+  one. Only the provider's reported ratings and the player's current rating are shown.
+- **Labels are threshold-based.** `best` / `good` / `inaccuracy` / `mistake` / `blunder`
+  use fixed centipawn-loss cut-offs; they are not a judgment of intent.
+- **One worker process** is enough for local use; more workers can run safely, but there
+  is no scheduler, priority or per-user quota.
+- **Payload size.** A full game stores one JSONB document (roughly 10–40 kB); aggregate
+  queries over many games will need a summary table rather than JSONB scans.
+- **PGN is required.** Games without a PGN cannot be analysed and fail with `missing_pgn`.
+- **Free board searches synchronously.** One request occupies one Stockfish process for
+  the configured depth; there is no queue, priority or per-user quota, so concurrent
+  users share the worker pool.
+
+## Cross-game form report
+
+- **Aggregates are computed per request** from stored JSONB payloads. At 43 Rapid games
+  this is fast; at thousands of games the query and aggregation will need a summary table.
+- **Win probability lost per game is a sum over moves**, so it can exceed 100 points in a
+  long game with several swings. It is a relative leak indicator, not a percentage of one
+  game.
+- **Phases use move numbers, not material.** "Late game" (31+) is not a true endgame
+  detector; a game that trades everything on move 15 still counts its moves as middlegame.
+- **Small samples.** A group becomes the primary leak only with at least three analysed
+  games; openings need two games to appear in the table. With few games the report says
+  so instead of naming a leak.
+- **Unknown openings** are grouped as "Unknown opening" and are excluded from the
+  primary-leak candidates unless they reach the sample threshold.
+- **One class or all classes at a time.** The report follows the selected `time_class`
+  and `days`; it never mixes scopes within one response. Analyses are cached per game,
+  so switching scope reuses completed work.
+
+## Explicitly deferred (not in the MVP)
+
+- Practice queue derived from the report's top moments.
+- "Brilliant" or other narrative labels without a written, verifiable definition.
+- `player_statistics` aggregate table (not needed yet; aggregates are computed per request).
+- Chess variants and arbitrary (non-published) date ranges; the published options are
+  7/30/90/180/365 days within `DATASET_WINDOW_DAYS`.
+- Accounts, authentication, private Chess.com data.
+- Production monitoring and alerting beyond the container healthchecks.

@@ -29,7 +29,7 @@ fixtures in `backend/tests/providers/fixtures/`.
 | Method | Path | Purpose |
 | ------ | ---- | ------- |
 | `get_profile` | `/pub/player/{username}` | Public profile, `player_id` |
-| `get_stats` | `/pub/player/{username}/stats` | Current Rapid rating (`chess_rapid.last`) |
+| `get_stats` | `/pub/player/{username}/stats` | Current per-class ratings (`chess_rapid`, `chess_blitz`, `chess_bullet`, `chess_daily`) |
 | `list_archive_months` | `/pub/player/{username}/games/archives` | Available monthly archives |
 | `get_month_archive` | `/pub/player/{username}/games/{YYYY}/{MM}` | Completed games ending in that month |
 
@@ -89,9 +89,12 @@ default.
 
 ### Stats
 
-Only `chess_rapid.last` is used. `rapid_section_present = False` means the player has
-no Rapid rating (unknown, not zero). `rating` must be an integer 0–10 000; `date`
-(epoch seconds) becomes `rapid_rating_at` and is dropped if the rating is invalid.
+Each of `chess_rapid`, `chess_blitz`, `chess_bullet` and `chess_daily` is read
+independently; a missing section means that class has no rating (unknown, not zero).
+`rating` must be an integer 0–10 000; `date` (epoch seconds) becomes the class's
+`*_rating_at` and is dropped if the rating is invalid. A missing section keeps the
+previously stored value and is reported as `chess_<class>_last_missing`; a present but
+non-dict section is reported the same way.
 
 ### Archive list
 
@@ -121,7 +124,7 @@ confirmed empty month.
 | `time_control` | `time_control` | `^\d+([+/]\d+)?$` (e.g. `600+5`, `1/259200`) or `None` |
 | ratings | `white.rating`, `black.rating` | Integer 0–10 000 or `None` |
 | `result` | `white.result`, `black.result` | See below |
-| `opening` | `eco` URL, else PGN `ECOUrl` | Slug of `https://www.chess.com/openings/<slug>`; name = slug with hyphens as spaces; `eco_code` from PGN `ECO` if `[A-E]\d\d`. No URL → no opening (an ECO code alone is not an exact opening) |
+| `opening` | `eco` URL, else PGN `ECOUrl` | Slug of `https://www.chess.com/openings/<slug>`; display name = slug with hyphens as spaces, then a small orthography table restores the punctuation the slug encoding loses ("King's", "Caro-Kann", "Smith-Morra", castling "O-O"); `eco_code` from PGN `ECO` if `[A-E]\d\d`. The provider's `/openings/Undefined` placeholder means "no opening". No URL → no opening (an ECO code alone is not an exact opening) |
 | `pgn` | `pgn` | Kept up to 100 000 characters; larger → `None` + `pgn_too_large`. Only header tags are parsed (regex, bounded); full move parsing is deferred |
 
 Ignored fields: `accuracies` (engine-based, out of MVP scope), `tcn`, `fen`,
@@ -145,8 +148,9 @@ both codes were known). Unknown results are kept and never counted as losses.
 1. **Rating semantics.** The documentation does not say whether `white.rating` /
    `black.rating` is the pre-game or post-game rating. ChessPulse labels it "rating
    reported with the game" and must not present it as either (spec §6.6).
-2. **Variants.** Games keep their `rules`. Ingestion must persist only `rules == "chess"`
-   for Rapid analytics; `None` (missing) is treated as not verified standard chess.
+2. **Variants.** Games keep their `rules`. Ingestion persists only `rules == "chess"`
+   for every standard class (Rapid, Blitz, Bullet, Daily); `None` (missing) is treated
+   as not verified standard chess.
 3. **Username rules** are not published; the accepted pattern is a safe superset.
 4. **Renames** are rare per the documentation; a rename is detected by `player_id` when
    the profile is fetched and must be resolved by the ingestion service.
@@ -154,5 +158,9 @@ both codes were known). Unknown results are kept and never counted as losses.
 6. **Refresh interval** is documented inconsistently (12 h vs 24 h).
 7. **Conditional requests** (`If-None-Match`) are not sent yet; `ResponseMeta` carries
    the validators for the cache issue.
-8. **Opening names** are derived from the provider's slug, so punctuation such as the
-   hyphen in "Caro-Kann" is shown as a space.
+8. **Opening names** are derived from the provider's slug. The slug cannot distinguish a
+   space from a hyphen or restore an apostrophe, so a documented orthography table
+   (`_OPENING_NAME_PHRASES` / `_OPENING_NAME_WORDS` in `normalize.py`) fixes the names
+   whose standard spelling is known; an opening whose slug is absent from that table is
+   shown with spaces where the name may need a hyphen. No external opening database is
+   used. The provider's `/openings/Undefined` page is treated as "no opening".

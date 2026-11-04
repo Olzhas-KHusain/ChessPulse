@@ -20,6 +20,8 @@ dependencies = [
     "psycopg[binary]==3.3.6",
     # Outbound HTTP to the Chess.com PubAPI (AGENT.md stack); also used by TestClient.
     "httpx==0.28.1",
+    # PGN parsing for game details (AGENT.md stack; package name of python-chess).
+    "chess==1.11.2",
 ]
 
 [project.optional-dependencies]

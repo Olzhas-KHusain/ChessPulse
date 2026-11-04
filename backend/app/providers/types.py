@@ -48,13 +48,26 @@ class ProviderProfile:
 
 @dataclass(frozen=True, slots=True)
 class ProviderStats:
-    """Current Rapid rating from the provider's player statistics."""
+    """Current per-class ratings from the provider's player statistics.
 
-    # False when the provider has no Rapid section for the player (never rated in Rapid).
+    A class that the player has never played has ``present=False`` and no rating;
+    ``None`` inside a present section means the provider gave no usable value.
+    """
+
+    # False when the provider has no section for the class (never rated there).
     rapid_section_present: bool
     rapid_rating: int | None
-    # Provider timestamp of the last rated Rapid game that produced ``rapid_rating``.
+    # Provider timestamp of the last rated game that produced the rating.
     rapid_rating_at: datetime | None
+    blitz_section_present: bool
+    blitz_rating: int | None
+    blitz_rating_at: datetime | None
+    bullet_section_present: bool
+    bullet_rating: int | None
+    bullet_rating_at: datetime | None
+    daily_section_present: bool
+    daily_rating: int | None
+    daily_rating_at: datetime | None
     meta: ResponseMeta
     issues: tuple[str, ...] = ()
 
