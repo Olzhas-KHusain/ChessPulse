@@ -284,6 +284,10 @@ with contact information, as Chess.com recommends, for example
 
 ## Containerization and deployment
 
+The authoritative runbook — rules, environments, release procedure, verification,
+operations and troubleshooting — is [`docs/deployment.md`](docs/deployment.md). The
+summary below is a quick start, not a substitute.
+
 One Dockerfile builds the frontend and serves it plus the API from a single image:
 
 ```bash

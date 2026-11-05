@@ -18,6 +18,7 @@ One multi-stage image. Node 22 builds `frontend/` into static assets; a Python 3
 | `render.yaml` | Render blueprint: free web + free Postgres + env vars |
 | `infra/cloudformation.yml` | all-free AWS EC2 path (`t3.micro`) |
 | `infra/README.md` | how to run the CloudFormation path |
+| `docs/deployment.md` | the authoritative deployment runbook: rules, procedures, verification, operations |
 
 ---
 

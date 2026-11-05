@@ -1,5 +1,7 @@
 # Infra: CloudFormation (AWS, free tier)
 
+End-to-end deployment rules, verification and operations: [`docs/deployment.md`](../docs/deployment.md).
+
 `cloudformation.yml` provisions one EC2 instance (t3.micro, free tier — 750 h
 for 12 months after signup) that runs the full `docker compose` stack: app
 (static frontend + FastAPI), analysis worker and PostgreSQL.
