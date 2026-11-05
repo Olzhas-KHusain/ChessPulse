@@ -15,7 +15,8 @@ overview, cross-game form report, rating chart, openings, opponents, paginated g
 game details with opt-in Stockfish analysis), a **free board** (place any pieces, play
 legal moves, engine classification) and a **dark/light theme**.
 
-Engineering rules: `AGENT.md`. Workflow: `process.md`. Product and technical
+Engineering rules: `AGENT.md`. Workflow: `process.md`. Roles: `roles/` (product
+manager, DevOps engineer, UI/UX developer). Product and technical
 specification: `spec.md`. Feature specifications: `docs/specs/` (database schema,
 Chess.com provider, ingestion, cache policy, overview, breakdown, games, engine analysis,
 free board and form report APIs, frontend dashboard). Architecture decisions:
@@ -35,6 +36,7 @@ free board and form report APIs, frontend dashboard). Architecture decisions:
 backend/     FastAPI modular monolith (app/, migrations/, tests/)
 frontend/    React + Vite application (src/)
 docs/specs/  Feature specifications (database-schema.md, api-*.md)
+roles/       Role operating manuals (pm, devops-engineer, ui-ux-developer)
 docker-compose.yml   Full stack: app (static FE + API) + worker + db
 infra/               AWS CloudFormation template + deploy notes
 render.yaml          Render blueprint (PaaS)

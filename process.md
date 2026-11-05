@@ -15,7 +15,9 @@ Use this priority order:
 3. The current GitHub Issue — scope and acceptance criteria
 4. `AGENT.md` — engineering rules
 5. `roles/pm.md` — product-management responsibilities
-6. Existing implementation and tests, when consistent with the approved specification
+6. `roles/devops-engineer.md` — build, CI/CD and deployment responsibilities
+7. `roles/ui-ux-developer.md` — browser surface, theme and accessibility responsibilities
+8. Existing implementation and tests, when consistent with the approved specification
 
 If two sources conflict, do not silently choose one. Identify the conflict and ask for clarification or propose a documented resolution.
 

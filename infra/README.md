@@ -37,5 +37,6 @@ the authoritative one in this repository.
 ## PaaS path
 
 `render.yaml` at the repository root deploys the web service on Render
-(`docker compose`-built image; database is Render's managed PostgreSQL — that
-plan is paid, so the VM path above is used for an all-free deployment).
+(Docker image; free web service + free PostgreSQL). The free web service sleeps
+after 15 idle minutes, and the free database expires 30 days after creation. Use
+the VM path above when a deployment must stay up longer than that.

@@ -271,7 +271,7 @@ An issue is complete only when:
 
 For each issue:
 
-1. Read `AGENT.md`, `process.md`, `spec.md`, and the issue.
+1. Read `AGENT.md`, `process.md`, `spec.md`, the matching role in `roles/`, and the issue.
 2. Inspect the repository and identify affected modules.
 3. State the intended approach and assumptions.
 4. Implement one vertical slice at a time.
