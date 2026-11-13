@@ -492,6 +492,8 @@ Read-only queries are safe. Anything that writes needs a dump and explicit appro
 
 ### 10.4 Backup and restore
 
+Local Compose database:
+
 ```bash
 # Backup (custom format)
 docker compose exec -T db pg_dump -U chesspulse -d chesspulse -Fc > chesspulse.dump
@@ -500,12 +502,31 @@ docker compose exec -T db pg_dump -U chesspulse -d chesspulse -Fc > chesspulse.d
 docker compose exec -T db pg_restore -U chesspulse -d chesspulse --clean --if-exists < chesspulse.dump
 ```
 
-For Render, use the external connection string and a local `pg_dump`/`pg_restore` of the
-same major version. Treat the URL as a secret: do not paste it into a shell that records
-history on a shared machine, and do not commit the dump.
+Render free database:
 
-The Render free plan is not a backup service. Expiry and deletion are real data-loss
-events.
+```powershell
+# Prompts for the external URL without putting it in shell history.
+powershell -ExecutionPolicy Bypass -File scripts/render-db-backup.ps1
+
+# Restores the dump into a throw-away local database and checks alembic_version.
+powershell -ExecutionPolicy Bypass -File scripts/verify-db-backup.ps1 `
+  -DumpFile .\chesspulse-render-<timestamp>.dump
+```
+
+The scripts use a `pg_dump`/`pg_restore` container of the same major version as the
+Compose database (16.9). If the Render server is a different major version, pass the
+matching image to the backup script, for example
+`-PostgresImage postgres:17-alpine`. The restore check deliberately fails on a version
+mismatch or a broken dump.
+
+Rules:
+
+- Treat the external URL as a secret: do not paste it into an issue, a document or a
+  chat, and do not commit the dump.
+- Take the dump before any destructive operation, and test the restore. A backup that has
+  never been restored is not a verified backup.
+- The Render free plan is not a backup service. Expiry and deletion are real data-loss
+  events.
 
 ### 10.5 Free-tier lifecycle
 
@@ -515,10 +536,14 @@ takes roughly 50 seconds to wake. Retry for at least 90 seconds before escalatin
 **The database expires after 30 days.** The free PostgreSQL instance is 1 GB and expires
 30 days after creation. Before expiry:
 
-1. Take a dump (10.4).
+1. Take a dump and verify the restore (10.4).
 2. Recreate the database from the blueprint, or create a new free database and update
    `DATABASE_URL`.
-3. Redeploy, restore if needed, then verify section 8.
+3. Restore the dump if the new database is empty.
+4. Redeploy, then verify section 8.
+
+The dump must be taken **before** the old database is deleted. Keep the old database and
+the dump until the new one passes verification.
 
 A `500` that appears "after a month" is usually an expired database, not a code
 regression.

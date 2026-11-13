@@ -29,6 +29,7 @@ frontend/blob-report/
 .vscode/
 .DS_Store
 
-# Local database files
+# Local database files and backups
 *.sqlite3
 *.db
+*.dump
