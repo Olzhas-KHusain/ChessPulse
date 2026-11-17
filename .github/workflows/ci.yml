@@ -148,6 +148,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+    # Job-level so the step-level `if` can read it: a step's own `env` block is
+    # not yet available when its `if` is evaluated.
+    env:
+      DEV_DEPLOY_HOOK: ${{ secrets.RENDER_DEV_DEPLOY_HOOK || secrets.RAILWAY_DEPLOY_HOOK }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -172,10 +176,8 @@ jobs:
         # Optional and development-only: set RENDER_DEV_DEPLOY_HOOK (or
         # RAILWAY_DEPLOY_HOOK) in repo secrets. Production has its own manual
         # promote workflow and `autoDeploy: false` in render.yaml.
-        env:
-          HOOK: ${{ secrets.RENDER_DEV_DEPLOY_HOOK || secrets.RAILWAY_DEPLOY_HOOK }}
-        if: env.HOOK != ''
-        run: curl -fsS -X POST "${HOOK}"
+        if: env.DEV_DEPLOY_HOOK != ''
+        run: curl -fsS -X POST "${DEV_DEPLOY_HOOK}"
       - name: Self-hosted VM note
         # AWS deployment runs from infra/: see infra/README.md. Kept as a manual
         # step (oidc/data-id) so CI never needs long-lived AWS keys.
