@@ -8,6 +8,7 @@ interactive, single-user tool and does not need parallel engine calls.
 from __future__ import annotations
 
 import threading
+import time
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 
@@ -21,6 +22,7 @@ from app.engine.board import (
 )
 from app.engine.game import Engine
 from app.engine.uci import EngineIdentity
+from app.observability.metrics import record_board_operation
 
 
 class BoardAnalysisService:
@@ -37,12 +39,26 @@ class BoardAnalysisService:
         return self._engine
 
     def evaluate(self, fen: str) -> BoardEvaluation:
-        with self._lock:
-            return evaluate_fen(fen, self._engine_or_start())
+        started_at = time.perf_counter()
+        try:
+            with self._lock:
+                result = evaluate_fen(fen, self._engine_or_start())
+        except Exception:
+            record_board_operation("evaluate", "error", time.perf_counter() - started_at)
+            raise
+        record_board_operation("evaluate", "success", time.perf_counter() - started_at)
+        return result
 
     def analyze_move(self, fen: str, uci: str) -> MoveAnalysis:
-        with self._lock:
-            return analyze_board_move(fen, uci, self._engine_or_start())
+        started_at = time.perf_counter()
+        try:
+            with self._lock:
+                result = analyze_board_move(fen, uci, self._engine_or_start())
+        except Exception:
+            record_board_operation("analyze_move", "error", time.perf_counter() - started_at)
+            raise
+        record_board_operation("analyze_move", "success", time.perf_counter() - started_at)
+        return result
 
     @property
     def engine_identity(self) -> EngineIdentity:

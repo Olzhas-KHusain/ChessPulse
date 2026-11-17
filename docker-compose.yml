@@ -1,8 +1,16 @@
 # Full stack: database + API/static app + analysis worker, all from one image.
 # The app image contains the built frontend, served by FastAPI on port 8000.
-# Required in .env: POSTGRES_PASSWORD (see .env.example).
+#
+# Environments are selected by the env file (which also sets
+# COMPOSE_PROJECT_NAME, so the databases never share a volume):
+#
+#   docker compose --env-file .env.development up -d --build --wait
+#   docker compose --env-file .env.production  up -d --build --wait
+#
+# Both files are copied from `.env.development.example` /
+# `.env.production.example`; neither real file is committed.
 
-name: chesspulse
+name: ${COMPOSE_PROJECT_NAME:-chesspulse}
 
 services:
   db:
@@ -10,13 +18,13 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-chesspulse}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the env file (copy an example)}
       POSTGRES_DB: ${POSTGRES_DB:-chesspulse}
     ports:
       # Bound to localhost only: the database is not exposed to the network.
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - chesspulse_pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -31,11 +39,22 @@ services:
       db:
         condition: service_healthy
     environment:
-      APP_ENV: production
+      APP_ENV: ${APP_ENV:-production}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-chesspulse}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-chesspulse}
       STATIC_DIR: /app/static
       # Stockfish ships inside the image (Debian package).
       STOCKFISH_PATH: /usr/games/stockfish
+      OTEL_ENABLED: ${OTEL_ENABLED:-false}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-chesspulse}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-1.0}
+      OTEL_METRIC_EXPORT_INTERVAL_MS: ${OTEL_METRIC_EXPORT_INTERVAL_MS:-15000}
+      OTEL_LOGS_ENABLED: ${OTEL_LOGS_ENABLED:-true}
+    # The observability stack publishes its collector on the host; this alias is
+    # how Linux containers resolve the host (Docker Desktop provides it already).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       # APP_BIND defaults to localhost (the database is not exposed to the
       # network); a host (EC2) sets APP_BIND=0.0.0.0 or puts a reverse proxy in
@@ -56,9 +75,18 @@ services:
       app:
         condition: service_healthy
     environment:
-      APP_ENV: production
+      APP_ENV: ${APP_ENV:-production}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-chesspulse}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-chesspulse}
       STOCKFISH_PATH: /usr/games/stockfish
+      OTEL_ENABLED: ${OTEL_ENABLED:-false}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-chesspulse}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-1.0}
+      OTEL_METRIC_EXPORT_INTERVAL_MS: ${OTEL_METRIC_EXPORT_INTERVAL_MS:-15000}
+      OTEL_LOGS_ENABLED: ${OTEL_LOGS_ENABLED:-true}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: ["python", "-m", "app.worker"]
     # The worker has no HTTP endpoint to probe. Liveness check: the worker's own
     # DB stack still connects (CI `compose up --wait` refuses services without
@@ -75,4 +103,6 @@ services:
       start_period: 30s
 
 volumes:
-  chesspulse_pgdata:
+  # Compose prefixes the volume with the project name, so the development and
+  # production projects get independent databases from the same file.
+  pgdata:

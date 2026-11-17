@@ -7,6 +7,8 @@ AWS path, CI/CD, migrations, verification and the incidents that actually happen
 Companion documents:
 
 - [`README.md`](../README.md) — product overview and local development.
+- [`docs/observability.md`](observability.md) — environments, OpenTelemetry,
+  dashboard, alerts, AI on-call and the manual promotion workflow.
 - [`infra/README.md`](../infra/README.md) — CloudFormation specifics.
 - [`roles/devops-engineer.md`](../roles/devops-engineer.md) — ownership and hard rules.
 - [`docs/release/RELEASE_CHECKLIST.md`](release/RELEASE_CHECKLIST.md) — checks executed
@@ -99,16 +101,29 @@ The `worker` service uses the same image as `app`; it does not rebuild it.
 
 ## 3. Environments
 
+Two Compose environments and two hosted paths. They are never active-active.
+
 | Environment | URL | Database | Worker | Persistence | Notes |
 |---|---|---|---|---|---|
-| Local dev | `http://localhost:5173` | Compose `db` | manual `python -m app.worker` | volume | Vite proxies `/api` and `/health` to `:8000` |
-| Local production-shaped | `http://127.0.0.1:8000` | Compose `db` | Compose `worker` | volume | The exact image used in production |
+| Local development | `http://localhost:5173` | Compose `chesspulse-dev` volume | manual `python -m app.worker` | volume | Vite proxies `/api` and `/health` to `:8000` |
+| Compose development | `http://127.0.0.1:8000` | `chesspulse-dev_pgdata` | Compose `worker` | volume | `--env-file .env.development`, `APP_ENV=development` |
+| Compose production-shaped | `http://127.0.0.1:8000` | `chesspulse-prod_pgdata` | Compose `worker` | volume | `--env-file .env.production`, `APP_ENV=production` |
 | CI e2e | `http://127.0.0.1:8000` | CI service + Compose | Compose `worker` | ephemeral | Live Chess.com data; not hermetic |
-| Render Free | `https://chesspulse-web.onrender.com` | Render free Postgres | embedded | Render disk | Sleeps after 15 idle minutes; DB expires after 30 days |
+| Render Free (production) | `https://chesspulse-web.onrender.com` | Render free Postgres | embedded | Render disk | Sleeps after 15 idle minutes; DB expires after 30 days |
 | AWS free tier | `http://<PublicIp>:8000` | Compose `db` on the instance | Compose `worker` | EBS volume | 750 h/month `t3.micro` for 12 months |
 
-Render is the current public deployment. AWS is the durable all-free alternative. They
-are not active-active: pick one as the public entry point.
+Development and production Compose stacks are isolated by
+`COMPOSE_PROJECT_NAME` (which prefixes the containers and the PostgreSQL
+volume) and by separate host ports. They can run at the same time:
+
+```bash
+docker compose --env-file .env.development up -d --build --wait
+docker compose --env-file .env.production  up -d --build --wait
+```
+
+Render is the current public production deployment. AWS is the durable all-free
+alternative. Promotion to Render production is manual (section 6.3): a push to
+`main` never deploys it.
 
 ---
 
@@ -120,20 +135,21 @@ that Render builds.
 ### 4.1 Configure
 
 ```bash
-cp .env.example .env
-# Edit .env:
+cp .env.production.example .env.production
+# Edit .env.production:
 #   POSTGRES_PASSWORD=<a real local password>
 #   Keep DATABASE_URL consistent if you use it outside Compose.
 ```
 
 `docker compose` reads `POSTGRES_PASSWORD` and builds `DATABASE_URL` for `app` and
-`worker` itself. `.env` is git-ignored; never commit it.
+`worker` itself. The env file is git-ignored; never commit it. For day-to-day work
+use `.env.development.example` (port 5432) instead; both can run together.
 
 ### 4.2 Start and verify
 
 ```bash
-docker compose up -d --build --wait
-docker compose ps
+docker compose --env-file .env.production up -d --build --wait
+docker compose --env-file .env.production ps
 curl -fsS http://127.0.0.1:8000/health
 curl -fsS "http://127.0.0.1:8000/api/v1/players/olzhaswlk/overview?time_class=rapid&days=30"
 ```
@@ -166,8 +182,8 @@ new button look absent.
 ### 4.4 Stop
 
 ```bash
-docker compose down        # keeps the database volume
-docker compose down -v     # DELETES the local database — explicit approval required
+docker compose --env-file .env.production down        # keeps the database volume
+docker compose --env-file .env.production down -v     # DELETES the local database — explicit approval required
 ```
 
 ---
@@ -203,6 +219,13 @@ Full list with defaults: [`.env.example`](../.env.example). The ones that cause 
 | `DATASET_WINDOW_DAYS` | no | `90` | Days of all time classes stored per refresh (30–730). Larger = more Chess.com requests. |
 | `CACHE_TTL_SECONDS` | no | `43200` | 12 h; Chess.com refreshes at most every 12 h. |
 | `ANALYSIS_DEPTH` / `ANALYSIS_THREADS` / `ANALYSIS_HASH_MB` | no | `12` / `1` / `64` | Part of the analysis cache key. Changing them does not invalidate old rows but prevents reuse. |
+| `OTEL_ENABLED` | no | `false` | Master switch for metrics, traces and logs. See [`docs/observability.md`](observability.md). |
+| `OTEL_SERVICE_NAME` | no | `chesspulse-api` | Resource `service.name`; the worker appends `-worker`. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | no | empty | OTLP/HTTP base URL. Empty while enabled exports nothing and logs one warning. |
+| `OTEL_EXPORTER_OTLP_HEADERS` | no | empty | `key=value,key2=value2`; this is a **secret** for Grafana Cloud. |
+| `OTEL_TRACES_SAMPLER_ARG` | no | `1.0` | Root sampling ratio; production should use `0.1` or lower. |
+| `OTEL_METRIC_EXPORT_INTERVAL_MS` | no | `15000` | Metric export interval (1000–300000 ms). |
+| `OTEL_LOGS_ENABLED` | no | `true` | Export correlated logs over OTLP when telemetry is enabled. |
 
 Database URL rules:
 
@@ -217,9 +240,14 @@ Database URL rules:
 
 | Secret | Where it lives | Who can see it |
 |---|---|---|
-| `POSTGRES_PASSWORD` | local `.env`; Render injects the database URL | local machine / Render |
+| `POSTGRES_PASSWORD` | local `.env.development` / `.env.production`; Render injects the database URL | local machine / Render |
 | `DATABASE_URL` | Render environment; Compose constructs it | Render / container |
-| `RENDER_DEPLOY_HOOK` | GitHub Actions secret | GitHub Actions |
+| `RENDER_API_KEY` | GitHub Actions secret (`production` Environment scope) | GitHub Actions |
+| `RENDER_SERVICE_ID` | GitHub Actions secret (not secret itself, but kept together) | GitHub Actions |
+| `RENDER_DEV_DEPLOY_HOOK` | GitHub Actions secret | GitHub Actions |
+| `ONCALL_TOKEN` | local env file; Compose writes it to a volume for Alertmanager | local machine / containers |
+| `LLM_API_KEY` | local env file / deployment secret | on-call container |
+| `OTEL_EXPORTER_OTLP_HEADERS` | deployment secret (Grafana Cloud token) | Render / container |
 | `E2E_USERNAME` (optional) | GitHub Actions secret | GitHub Actions |
 | `GITHUB_TOKEN` | provided by Actions | Actions only |
 
@@ -227,10 +255,12 @@ Rules:
 
 - Add Actions secrets through the GitHub UI (Settings → Secrets and variables → Actions).
   Do not print a secret to verify it; verify by using it.
+- Production promotion secrets belong to the `production` Environment, not the whole
+  repository, so only the promotion job can read them.
 - Rotating the database password is a coordinated change: update the database role,
   update every consumer, restart `app` and `worker`.
 - The settings validator names invalid variables but never echoes their values. Do not
-  add logging that prints `DATABASE_URL`.
+  add logging that prints `DATABASE_URL`, OTLP headers or LLM keys.
 
 ### 5.4 Render database compatibility
 
@@ -252,43 +282,54 @@ Workflow: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
 | `backend` | push + PR | `ruff check`, `ruff format --check`, `mypy`, `pytest` against a PostgreSQL 16 service |
 | `frontend` | push + PR | `npm ci`, `lint`, `typecheck`, `test`, `build` |
 | `e2e` | push + PR, after backend + frontend | Compose stack builds and becomes healthy, then Playwright runs against `http://127.0.0.1:8000` |
-| `deploy` | **push only**, after e2e | build and push `ghcr.io/<owner>/chesspulse:<sha>` and `:latest`, then call the deploy hook if configured |
+| `observability` | push + PR | `scripts/check-observability-config.py` (YAML/JSON, metric and label names, alert runbooks) and the on-call service's `ruff`, `mypy`, `pytest` |
+| `deploy` | **push only**, after e2e + observability | build and push `ghcr.io/<owner>/chesspulse:<sha>` and `:latest`; optionally call the **development** hook |
 
-Pull requests never deploy. A failing `e2e` blocks `deploy`.
+Pull requests never deploy. A failing `e2e` or `observability` job blocks `deploy`.
+`deploy` never touches production: see 6.3.
 
 ### 6.2 What the deploy job does and does not do
 
 - It pushes a portable image to GHCR. **Render does not run that image.** `render.yaml`
   uses `runtime: docker` and builds from the repository `Dockerfile`. GHCR is an
   artifact and a rollback source for hosts that pull images.
-- If `RENDER_DEPLOY_HOOK` (or `RAILWAY_DEPLOY_HOOK`) exists, it `POST`s the hook. The
-  hook asks the platform to build the current commit.
+- If `RENDER_DEV_DEPLOY_HOOK` (or `RAILWAY_DEPLOY_HOOK`) exists, it `POST`s the hook.
+  That hook must point at the **development** environment, never production.
 - A successful hook call means "the platform accepted the request". It does **not** mean
-  the new container is healthy. Verify the public URL afterwards.
+  the new container is healthy. Verify the URL afterwards.
+- It does not deploy production, no matter which branch was pushed.
 
-### 6.3 Duplicate deploys
+### 6.3 Manual production promotion
 
-`render.yaml` currently sets `autoDeploy: true`, and CI can also call the deploy hook.
-On a push to the connected branch, Render may start a build on its own and CI may start
-another after e2e. This is redundant, not harmful, but it wastes free build minutes.
+Production deploys only through
+[`.github/workflows/promote.yml`](../.github/workflows/promote.yml), started by hand.
+`render.yaml` sets `autoDeploy: false`, so Render does not build on a push.
 
-Choose one:
+The workflow:
 
-- **Recommended:** set `autoDeploy: false` in `render.yaml` and keep the hook, so a
-  deployment happens only after all tests pass.
-- Or remove the `RENDER_DEPLOY_HOOK` secret and let Render's auto-deploy own the flow.
-  In that case CI does not gate the deployment.
+1. requires the full 40-character SHA and `confirm=promote`;
+2. checks the commit is contained in `main` (`compare/main...<sha>`);
+3. requires a successful `ci.yml` **push-to-main** run for that exact SHA;
+4. pauses for approval on the `production` GitHub Environment (configure required
+   reviewers);
+5. calls `POST https://api.render.com/v1/services/<id>/deploys` with `commitId`;
+6. polls the deploy and fails on `build_failed`, `canceled`, `deactivated`,
+   `pre_deploy_failed` or a 30-minute timeout;
+7. prints the deploy id and commit; public verification is still section 8.
 
-Do not leave both enabled and then claim CI gates production.
+Secrets: `RENDER_API_KEY` and `RENDER_SERVICE_ID` in the `production` Environment.
+Without them the workflow fails before contacting Render; it never falls back to
+deploying the branch head.
 
 ### 6.4 How to read a run
 
 1. Open the Actions run for the **exact commit SHA** you intend to deploy. A green run on
    a different SHA proves nothing.
-2. Confirm all four jobs for a `main` push: `backend`, `frontend`, `e2e`, `deploy`.
+2. Confirm all five jobs for a `main` push: `backend`, `frontend`, `e2e`,
+   `observability`, `deploy`.
 3. If `e2e` failed, download the `playwright-traces` artifact before retrying.
-4. If `deploy` failed, read whether the failure was the GHCR push or the hook. A failing
-   hook is not a code failure.
+4. If `deploy` failed, read whether the failure was the GHCR push or the development
+   hook. A failing hook is not a code failure.
 5. Record the run URL in the deployment report.
 
 Optional, if the GitHub CLI is installed:
@@ -313,13 +354,19 @@ Follow the order. Do not skip step 5.
    runtime configuration, the image or only the UI.
 2. **Run the local checks** that match the change (section 9).
 3. **Open a PR.** CI must be green; `deploy` is skipped on PRs by design.
-4. **Merge to `main`.** The push triggers backend, frontend, e2e and (if green) deploy.
-5. **Confirm the deployed commit.** In Render, open the service → Events/Deploys and check
+4. **Merge to `main`.** The push triggers backend, frontend, e2e, observability and
+   (if green) the GHCR image build plus an optional **development** redeploy. It does
+   not deploy production.
+5. **Promote manually.** Actions → *Promote to production* → run with the full merge
+   SHA and `confirm=promote`. Approve the `production` Environment. The workflow
+   verifies the green CI run for that SHA and deploys it on Render.
+6. **Confirm the deployed commit.** In Render, open the service → Events/Deploys and check
    the commit SHA. Do not infer the SHA from `/health`; it returns the application
    version, not the commit.
-6. **Run post-deploy verification** (section 8).
-7. **Record evidence**: SHA, run URL, `/health`, database-backed response, public URL.
-8. If verification fails, **roll back or fix forward** (section 7.2) and say which.
+7. **Run post-deploy verification** (section 8).
+8. **Record evidence**: SHA, CI run URL, promotion run URL, `/health`, database-backed
+   response, public URL.
+9. If verification fails, **roll back or fix forward** (section 7.2) and say which.
 
 ### 7.1 Migrations
 
@@ -358,9 +405,9 @@ cd backend
 
 | Situation | Action |
 |---|---|
-| Bad frontend/backend code, schema compatible | Redeploy the previous known-good commit SHA from the Render dashboard (or re-run its CI deploy). Verify again. |
+| Bad frontend/backend code, schema compatible | Promote the previous known-good commit SHA through the manual workflow (or redeploy it from the Render dashboard). Verify again. |
 | Broken migration, schema not yet destructive | Fix forward with a new migration; do not `downgrade` a live database. If the old code cannot run on the new schema, restore the dump into a new database and point `DATABASE_URL` at it. |
-| Database expired / deleted | Recreate the free database, point `DATABASE_URL` at it, redeploy; data is lost unless you have a dump. |
+| Database expired / deleted | Recreate the free database, point `DATABASE_URL` at it, promote again; data is lost unless you have a dump. |
 | Provider (Chess.com) outage | Do not redeploy. The app returns `502`/`504`/`UPSTREAM_*`; cached data may still serve with `data_status`. |
 
 A rollback is not complete until the public URL passes section 8 again.
@@ -419,6 +466,7 @@ This proves the static build is mounted and the catch-all route serves `index.ht
 ```text
 Deployed: <commit SHA>
 CI run:   <URL> — <conclusion>
+Promotion: <workflow run URL> — <approved by / deploy id>   (production only)
 URL:      <public URL>
 /health:  <response>
 DB check: <endpoint> — <status, key fields>
@@ -448,7 +496,17 @@ npm run typecheck
 npm run format:check
 npm test
 npm run build
+
+# Observability configuration + AI on-call (from the repository root)
+backend/.venv/Scripts/python.exe scripts/check-observability-config.py
+cd observability/oncall
+../../backend/.venv/Scripts/python.exe -m pytest -q
+../../backend/.venv/Scripts/python.exe -m ruff check .
+../../backend/.venv/Scripts/python.exe -m mypy app.py
 ```
+
+The config checker needs PyYAML (`pip install "pyyaml==6.0.2"`); CI installs it in
+the `observability` job.
 
 Linux/macOS replaces `.venv/Scripts/python.exe` with `.venv/bin/python`.
 
@@ -458,6 +516,25 @@ with skipped database tests is not a full backend run — say so.
 The Vite build emits a chunk-size warning for the single large bundle. It is a warning,
 not a failure. Do not "fix" it by adding a code-splitting change to an unrelated PR.
 
+### 9.1 Observability stack
+
+Full behaviour is documented in [`docs/observability.md`](observability.md). In short:
+
+```bash
+# Development app + telemetry
+docker compose --env-file .env.development up -d --build --wait
+
+# Collector, Prometheus, Alertmanager, Tempo, Loki, Grafana, on-call
+docker compose --env-file .env.development \
+  -f observability/docker-compose.observability.yml up -d --wait
+
+curl -fsS http://127.0.0.1:8080/health          # on-call mode
+curl -s  http://127.0.0.1:8889/metrics | grep '^chesspulse_'
+```
+
+The stack binds every port to `127.0.0.1`. It is not internet-facing and has no
+authentication of its own.
+
 ---
 
 ## 10. Operations
@@ -465,18 +542,22 @@ not a failure. Do not "fix" it by adding a code-splitting change to an unrelated
 ### 10.1 Logs
 
 ```bash
-docker compose logs -f --tail=200 app worker
-docker compose ps
+docker compose --env-file .env.development logs -f --tail=200 app worker
+docker compose --env-file .env.development ps
 ```
 
 On Render: service → Logs. The platform log stream includes the entrypoint
 (`alembic upgrade head`, uvicorn) and the embedded worker. If the worker is silent,
 first confirm `RUN_EMBEDDED_WORKER=1`.
 
+When OTel is enabled, the same log lines are also exported to Loki (or Grafana
+Cloud) with `trace_id`/`span_id` correlation. The local plain-text log remains the
+first place to look; telemetry is a second, queryable copy.
+
 ### 10.2 Restart
 
 ```bash
-docker compose restart app worker
+docker compose --env-file .env.development restart app worker
 ```
 
 On Render: Manual Deploy → Restart service, or redeploy the same commit. A restart does
@@ -575,6 +656,24 @@ upgrade silently.
 - `CHESS_COM_USER_AGENT` should identify the deployment and include contact information.
   Do not impersonate a browser.
 
+### 10.8 Observability and alerting
+
+- Metrics, traces and logs are optional and off by default. Enabling them never makes
+  `/health` fail; a missing collector degrades telemetry, not the app.
+- The local dashboard is provisioned from
+  `observability/grafana/dashboards/chesspulse-overview.json`; UI edits are not
+  persisted.
+- Alert rules, the metric catalogue and the runbooks are in
+  [`docs/observability.md`](observability.md). Each alert annotation points at a
+  section there.
+- The AI on-call responder always produces a deterministic runbook diagnosis. An LLM
+  is optional and cannot block alert handling.
+- Verify metric names with `curl -s http://127.0.0.1:8889/metrics | grep '^chesspulse_'`
+  before trusting a dashboard or a silence.
+- Render Free cannot host this stack. On Render, export OTLP to a free Grafana Cloud
+  tier; alert rules then live in Grafana, not in this repository. Do not claim alerting
+  works on Render until that is configured and verified.
+
 ---
 
 ## 11. Troubleshooting
@@ -592,9 +691,14 @@ upgrade silently.
 | Port 5432 already in use | Local PostgreSQL running | Set `POSTGRES_PORT` and keep `DATABASE_URL` consistent. |
 | Changed the database password, auth fails | Volume still has the old role password | Update the role, or recreate the volume (data loss). |
 | `alembic check` reports changes | Model changed without a migration | Generate a revision and review it. |
-| Playwright cannot find a new control | Stale image | `docker compose up -d --build --wait`, then rerun. |
+| Playwright cannot find a new control | Stale image | `docker compose --env-file .env.development up -d --build --wait`, then rerun. |
 | Playwright passes locally, fails in CI | Different data state or live provider | Read the trace; state the DB state; do not call it flaky without evidence. |
-| Render deploys twice per push | `autoDeploy: true` plus CI hook | Choose one flow (6.3). |
+| Production did not redeploy after a push | By design: `autoDeploy: false` | Run the manual promotion workflow (6.3). |
+| Promotion run fails "no successful CI run" | The SHA has no green push-to-main run | Pick the merged SHA, wait for CI, or fix the failing job. |
+| Grafana panels are empty | OTel disabled, wrong endpoint, or metric names changed | Check `OTEL_ENABLED`, the app log, and `curl :8889/metrics`. |
+| On-call returns 401 | Token mismatch between Alertmanager and the service | Regenerate `ONCALL_TOKEN` in the env file and restart both. |
+| On-call returns 503 | `ONCALL_TOKEN` is empty | Set it; the service fails closed on purpose. |
+| Alerts never reach on-call | Alertmanager route or network | Check Alertmanager `/-/status` and its logs; the webhook must be `oncall:8080/alerts`. |
 | Site works over HTTP on EC2 but not HTTPS | No TLS terminator in the template | Put a TLS reverse proxy in front, or use the Render path. |
 
 ---
@@ -640,11 +744,12 @@ Current blueprint: [`render.yaml`](../render.yaml). The existing public service 
    `connectionString` is injected as `DATABASE_URL`.
 4. Wait for the first deploy. The entrypoint runs migrations, then uvicorn; with
    `RUN_EMBEDDED_WORKER=1` the worker starts too.
-5. Add the deploy hook to GitHub Actions if you want CI-gated deploys:
-   Render service → Settings → Deploy Hook → copy; GitHub repository → Settings →
-   Secrets and variables → Actions → New repository secret `RENDER_DEPLOY_HOOK`.
-   Never paste the value into an issue, a document or a chat.
-6. Verify section 8.
+5. Configure production promotion: create `RENDER_API_KEY` and `RENDER_SERVICE_ID`
+   as secrets in the `production` GitHub Environment, and add required reviewers to
+   that Environment. `autoDeploy` stays `false`; a push does not deploy.
+6. Optional telemetry: set `OTEL_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT` and
+   `OTEL_EXPORTER_OTLP_HEADERS` in the Render dashboard (see section 10.8).
+7. Verify section 8.
 
 ### 13.2 Changing configuration
 
@@ -662,6 +767,8 @@ Current blueprint: [`render.yaml`](../render.yaml). The existing public service 
 - The free database expires; there is no always-free Render database.
 - Render builds from the Dockerfile, not from GHCR. The image tag in CI is not what Render
   runs.
+- Render Free cannot host Prometheus, Loki, Tempo, Grafana or Alertmanager. Production
+  telemetry depends on an external OTLP destination (free Grafana Cloud or a VM).
 - The free instance is not a production SLA. Use the AWS path when durability matters.
 
 ---
@@ -748,12 +855,16 @@ Use this when you touch deployment-related files.
 
 | If you change… | Also update / check |
 |---|---|
-| `Dockerfile` | `docker compose up --build`, Render build, `/health`, board engine check |
-| `docker-compose.yml` | local stack, CI e2e, worker ordering, volumes |
+| `Dockerfile` | `docker compose --env-file .env.production up --build`, Render build, `/health`, board engine check |
+| `docker-compose.yml` | local stack, CI e2e, worker ordering, volumes, OTel env |
 | `.github/workflows/ci.yml` | required checks, deploy gate, secrets documented here |
-| `render.yaml` | this runbook, `infra/README.md`, `roles/devops-engineer.md`; confirm no paid plan |
+| `.github/workflows/promote.yml` | `production` Environment reviewers, Render secrets, section 6.3 |
+| `render.yaml` | this runbook, `infra/README.md`, `roles/devops-engineer.md`; confirm no paid plan and `autoDeploy: false` |
 | `infra/cloudformation.yml` | `infra/README.md`, this runbook, free-tier resources |
 | `.env.example` / settings | configuration table in section 5, Compose/Render env |
+| `.env.development.example` / `.env.production.example` | environment table in section 3, `docs/observability.md` section 1 |
+| `observability/` | `scripts/check-observability-config.py`, `docs/observability.md`, section 10.8 |
+| `backend/app/observability/` | metric table in `docs/observability.md`, alert rules, dashboard JSON |
 | A migration | `alembic check`, fresh-database upgrade, release order in 7.1 |
 | The public URL | README, role doc, this runbook, verification commands |
 
@@ -763,11 +874,17 @@ Use this when you touch deployment-related files.
 
 ```bash
 # Local stack
-docker compose up -d --build --wait
+docker compose --env-file .env.development up -d --build --wait
 curl -fsS http://127.0.0.1:8000/health
-docker compose logs -f --tail=200 app worker
-docker compose down          # keep data
-docker compose down -v       # DESTROYS data
+docker compose --env-file .env.development logs -f --tail=200 app worker
+docker compose --env-file .env.development down          # keep data
+docker compose --env-file .env.development down -v       # DESTROYS data
+
+# Observability
+python scripts/check-observability-config.py
+docker compose --env-file .env.development -f observability/docker-compose.observability.yml up -d --wait
+curl -fsS http://127.0.0.1:8080/health
+curl -s  http://127.0.0.1:8889/metrics | grep '^chesspulse_'
 
 # Migrations
 cd backend

@@ -22,6 +22,7 @@ from app.core.errors import register_error_handlers
 from app.core.logging import configure_logging
 from app.db.session import build_engine, build_session_factory
 from app.engine.runtime import stockfish_factory
+from app.observability import Observability, configure_observability
 from app.services.board import BoardAnalysisService
 
 
@@ -46,6 +47,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             yield
         finally:
             app.state.board_service.close()
+            observability = app.state.observability
+            if observability is not None:
+                observability.shutdown()
             engine.dispose()
 
     app = FastAPI(
@@ -61,6 +65,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.engine = engine
     app.state.session_factory = build_session_factory(engine)
     app.state.board_service = BoardAnalysisService(stockfish_factory(settings))
+    app.state.observability = Observability()
 
     app.add_middleware(
         CORSMiddleware,
@@ -93,4 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return FileResponse(candidate)
             return FileResponse(_static / "index.html")
 
+    # Instrument after routes and middleware are registered. A missing collector
+    # never prevents the app from starting (see app.observability.setup).
+    app.state.observability = configure_observability(app, settings)
     return app

@@ -1,0 +1,175 @@
+# Local / VM observability stack for ChessPulse.
+#
+#   docker compose --env-file .env.development \
+#     -f observability/docker-compose.observability.yml up -d --wait
+#
+# Everything is free and self-hosted: OTel Collector, Prometheus,
+# Alertmanager, Tempo, Loki, Grafana and the AI on-call service.
+# Render Free cannot host this stack; production on Render should export OTLP to
+# a free Grafana Cloud tier instead (see docs/observability.md).
+#
+# Ports are bound to 127.0.0.1. This stack has no authentication of its own and
+# must not be exposed to the internet as-is.
+
+name: ${COMPOSE_PROJECT_NAME:-chesspulse}-observability
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector/config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+      # Application metrics in Prometheus format (also scraped internally).
+      - "127.0.0.1:8889:8889"
+    depends_on:
+      - tempo
+      - loki
+    logging: *default-logging
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    depends_on:
+      - otel-collector
+      - alertmanager
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9090/-/healthy >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.0
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - oncall-token:/etc/alertmanager-secret:ro
+      - alertmanager-data:/alertmanager
+    ports:
+      - "127.0.0.1:${ALERTMANAGER_PORT:-9093}:9093"
+    depends_on:
+      oncall:
+        condition: service_healthy
+      oncall-token-init:
+        condition: service_completed_successfully
+    logging: *default-logging
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    logging: *default-logging
+
+  loki:
+    image: grafana/loki:3.3.2
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3100/ready >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in the env file}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+    logging: *default-logging
+
+  oncall:
+    build: ./oncall
+    restart: unless-stopped
+    environment:
+      ONCALL_TOKEN: ${ONCALL_TOKEN:?Set ONCALL_TOKEN in the env file}
+      ONCALL_ENVIRONMENT: ${APP_ENV:-development}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-20}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "127.0.0.1:${ONCALL_PORT:-8080}:8080"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  # Compose cannot interpolate a variable into a mounted file, and putting the
+  # token in a command line would expose it in `docker inspect`. A tiny init
+  # container writes it once into a volume Alertmanager reads as a credentials
+  # file. The token is never printed.
+  oncall-token-init:
+    image: busybox:1.37
+    restart: "no"
+    environment:
+      ONCALL_TOKEN: ${ONCALL_TOKEN:?Set ONCALL_TOKEN in the env file}
+    command:
+      - sh
+      - -c
+      - umask 077; printf '%s' "$$ONCALL_TOKEN" > /token/oncall_token
+    volumes:
+      - oncall-token:/token
+    logging: *default-logging
+
+volumes:
+  prometheus-data:
+  alertmanager-data:
+  tempo-data:
+  loki-data:
+  grafana-data:
+  oncall-token:

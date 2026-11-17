@@ -2,7 +2,7 @@
 
 *Owns the ChessPulse build, container, CI/CD and deployment — one image that serves the SPA and the API, a free-tier deployment that stays free, and proof that every deployment claim was measured on the public URL.*
 
-You own `Dockerfile`, `docker-compose.yml`, `.github/workflows/ci.yml`, `render.yaml` and `infra/`. Application behaviour belongs to `AGENT.md`; the browser surface belongs to [`ui-ux-developer.md`](ui-ux-developer.md); product scope belongs to [`pm.md`](pm.md).
+You own `Dockerfile`, `docker-compose.yml`, the Compose environment files, `.github/workflows/` (CI and promotion), `render.yaml`, `observability/` and `infra/`. Application behaviour belongs to `AGENT.md`; the browser surface belongs to [`ui-ux-developer.md`](ui-ux-developer.md); product scope belongs to [`pm.md`](pm.md).
 
 ---
 
@@ -13,12 +13,16 @@ One multi-stage image. Node 22 builds `frontend/` into static assets; a Python 3
 | File | What it decides |
 |---|---|
 | `Dockerfile` | image contents, Stockfish, `PORT`, embedded worker, healthcheck |
-| `docker-compose.yml` | local/prod VM topology, migration ordering, healthchecks |
-| `.github/workflows/ci.yml` | what must pass before a deploy |
-| `render.yaml` | Render blueprint: free web + free Postgres + env vars |
+| `docker-compose.yml` | local/prod VM topology, migration ordering, healthchecks, OTel env |
+| `.env.development.example` / `.env.production.example` | project name, ports, app env and secrets template |
+| `.github/workflows/ci.yml` | what must pass before an image is built |
+| `.github/workflows/promote.yml` | the only production deploy path (manual, approved) |
+| `render.yaml` | Render blueprint: free web + free Postgres + env vars, `autoDeploy: false` |
+| `observability/` | collector, Prometheus rules, Alertmanager, Tempo, Loki, Grafana, on-call |
 | `infra/cloudformation.yml` | all-free AWS EC2 path (`t3.micro`) |
 | `infra/README.md` | how to run the CloudFormation path |
 | `docs/deployment.md` | the authoritative deployment runbook: rules, procedures, verification, operations |
+| `docs/observability.md` | environments, metrics, dashboard, alerts, AI on-call |
 
 ---
 
@@ -52,20 +56,51 @@ Never upgrade a plan to make a test pass. If a durable all-free deployment is ne
 
 ## CI/CD
 
-The pipeline has four jobs:
+The pipeline has five jobs:
 
 1. `backend` — `ruff check`, `ruff format --check`, `mypy`, `pytest` against a PostgreSQL service container.
 2. `frontend` — `npm ci`, `lint`, `typecheck`, `test`, `build`.
 3. `e2e` — `docker compose up --build -d --wait`, wait for `/health`, then `npx playwright test` with `E2E_BASE_URL=http://127.0.0.1:8000`.
-4. `deploy` — only on a push, after `e2e`: build and push `ghcr.io/<owner>/chesspulse:<sha>` and `:latest`, then `POST` `RENDER_DEPLOY_HOOK` (or `RAILWAY_DEPLOY_HOOK`) when the secret exists.
+4. `observability` — `python scripts/check-observability-config.py` (YAML/JSON, metric/label names, alert runbooks) plus `ruff`, `mypy` and `pytest` for the AI on-call service.
+5. `deploy` — only on a push, after `e2e` and `observability`: build and push `ghcr.io/<owner>/chesspulse:<sha>` and `:latest`, then optionally `POST` `RENDER_DEV_DEPLOY_HOOK` (development only).
+
+Production is **not** part of CI. `.github/workflows/promote.yml` is a manual
+`workflow_dispatch`, bound to the `production` GitHub Environment (required
+reviewers). It verifies that the exact SHA is on `main` and has a successful
+push-to-main `ci.yml` run, then calls the Render API with `commitId`. Secrets:
+`RENDER_API_KEY`, `RENDER_SERVICE_ID`, scoped to that Environment.
 
 Rules that keep this honest:
 
 - GHCR rejects uppercase repository names. The image reference is lowercased on purpose (`tr '[:upper:]' '[:lower:]'`); do not remove that step.
 - The deploy job runs only on `push`, never on a pull request.
-- `RENDER_DEPLOY_HOOK` is a GitHub Actions secret and contains a key. Never print it, commit it, or paste it into a report.
+- `RENDER_DEV_DEPLOY_HOOK`, `RENDER_API_KEY` and `RENDER_SERVICE_ID` are GitHub Actions secrets. Never print them, commit them, or paste them into a report.
 - A green local run is not a green pipeline. Read the conclusion of the run for **the exact commit SHA**.
-- The deploy job succeeding means the hook was called; it does **not** prove the new container is healthy. Hit `/health` on the public URL afterwards.
+- The image-push job succeeding means the image exists; it does **not** prove the new container is healthy. Hit `/health` on the public URL after promotion.
+- `autoDeploy` must stay `false`. Turning it on reintroduces undeclared production deploys.
+- The promotion workflow must not "fall back" to the branch head when a SHA check fails. Refuse and report.
+
+---
+
+## Environments and observability
+
+- Development and production Compose stacks are separated by
+  `COMPOSE_PROJECT_NAME` (container and volume prefix) and by env file. Never
+  point both at one database.
+- OpenTelemetry is optional (`OTEL_ENABLED=false` by default). Enabling it must
+  never make `/health` fail or prevent startup; a missing collector is not an
+  outage.
+- Metric labels are bounded: routes, error codes, outcomes. Never add a
+  username, game id or FEN to a label.
+- The dashboard, alert rules and runbooks live in `observability/` and
+  `docs/observability.md`. Run `python scripts/check-observability-config.py`
+  after touching any of them; it cross-checks metric names against the backend
+  instruments.
+- Render Free cannot host Prometheus, Loki, Tempo, Grafana or Alertmanager. Use
+  a free Grafana Cloud OTLP destination or a self-hosted VM. Do not claim
+  production alerting exists until it is configured and a test alert is seen.
+- The AI on-call responder must always work without an LLM key; the
+  deterministic runbook is the baseline, the model is an optional enhancement.
 
 ---
 
@@ -80,6 +115,8 @@ Rules that keep this honest:
 7. **Playwright artifacts must not be committed.** `frontend/test-results/` is generated; `.last-run.json` was committed once and had to be removed.
 8. **Two containers must not migrate at once.** Keep the Compose ordering (`worker` after `app` health).
 9. **`infra/README.md` once said the Render database was paid.** `render.yaml` is the source of truth for the current free blueprint; if you change one, reconcile the other in the same PR.
+10. **Render auto-deploy silently bypassed CI.** `autoDeploy: true` deployed a commit before its checks finished. It is now `false`; production goes through `promote.yml` only.
+11. **Telemetry can be configured but blind.** Setting `OTEL_ENABLED=true` with an empty endpoint exports nothing. Check `curl :8889/metrics | grep '^chesspulse_'` before trusting a dashboard.
 
 ---
 
@@ -88,10 +125,14 @@ Rules that keep this honest:
 Local:
 
 ```bash
-docker compose up -d --build --wait
-docker compose ps
+docker compose --env-file .env.development up -d --build --wait
+docker compose --env-file .env.development ps
 curl -fsS http://127.0.0.1:8000/health
 cd frontend && npx playwright test
+
+# Observability configuration and on-call behaviour (no Docker needed)
+python scripts/check-observability-config.py
+cd observability/oncall && python -m pytest -q
 ```
 
 Public deployment:
@@ -116,6 +157,8 @@ For a deployment report, include all four:
 ## Hard rules
 
 - Never enable a paid Render, Railway or AWS feature to make something work.
+- Never let a push deploy production; promotion is manual and approved.
+- Never re-enable `autoDeploy` on the production Render service.
 - Never commit a deploy hook, token, `.env`, database file or build artifact.
 - Never claim "deployed" without a `/health` response from the public URL.
 - Never claim CI is green without reading the run conclusion for that commit.

@@ -31,6 +31,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from app.observability.metrics import record_provider_request
 from app.providers.errors import ProviderError, ProviderErrorCode
 from app.providers.types import ResponseMeta
 
@@ -186,6 +187,20 @@ class ChessComHttpClient:
         Raises:
             ProviderError: for every failure, after retries where applicable.
         """
+        # 2xx is the only metric outcome reported as success; every failure keeps its
+        # ProviderErrorCode, which is a bounded label set.
+        started_at = self._monotonic()
+        try:
+            response = self._get_json(path, resource)
+        except ProviderError as error:
+            record_provider_request(
+                resource.value, error.code.value, self._monotonic() - started_at
+            )
+            raise
+        record_provider_request(resource.value, "success", self._monotonic() - started_at)
+        return response
+
+    def _get_json(self, path: str, resource: ResourceKind) -> JsonResponse:
         started = self._monotonic()
         attempts = self._retry.max_retries + 1
         for attempt in range(1, attempts + 1):

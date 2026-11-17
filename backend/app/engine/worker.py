@@ -27,6 +27,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.engine.game import AnalysisError, Engine, analyse_game
 from app.engine.uci import EngineError
 from app.models import AnalysisJob, AnalysisJobStatus, Game, GameAnalysis
+from app.observability.metrics import record_analysis_job
+from app.observability.setup import current_tracer
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +124,20 @@ def process_claimed(
     session: Session, job: ClaimedJob, engine_factory: EngineFactory, *, max_attempts: int
 ) -> str:
     """Analyse one claimed job. Returns ``completed``, ``failed`` or ``retry``."""
+    started = time.monotonic()
+    with current_tracer().start_as_current_span("analysis.process_job") as span:
+        span.set_attribute("analysis.job.id", job.id)
+        span.set_attribute("analysis.game.id", job.game_id)
+        span.set_attribute("analysis.attempt", job.attempts)
+        outcome = _process_claimed(session, job, engine_factory, max_attempts=max_attempts)
+        span.set_attribute("analysis.outcome", outcome)
+    record_analysis_job(outcome, time.monotonic() - started)
+    return outcome
+
+
+def _process_claimed(
+    session: Session, job: ClaimedJob, engine_factory: EngineFactory, *, max_attempts: int
+) -> str:
     game = session.get(Game, job.game_id)
     if game is None:  # the FK cascades, so this only happens on a concurrent delete
         _fail(session, job, "GAME_DELETED")

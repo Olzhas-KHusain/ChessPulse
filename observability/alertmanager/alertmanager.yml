@@ -1,0 +1,29 @@
+# Alertmanager: deliver every alert group to the AI on-call responder.
+#
+# The bearer token is mounted as a file (never baked into this YAML, never
+# committed). docker-compose.observability.yml creates it from ONCALL_TOKEN.
+#
+# Resolved alerts are sent too (send_resolved: true) so the responder can close
+# the incident instead of only seeing failures.
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: ai-oncall
+  group_by: [alertname, severity]
+  group_wait: 10s
+  group_interval: 2m
+  repeat_interval: 4h
+
+receivers:
+  - name: ai-oncall
+    webhook_configs:
+      - url: http://oncall:8080/alerts
+        send_resolved: true
+        max_alerts: 10
+        timeout: 15s
+        http_config:
+          authorization:
+            type: Bearer
+            credentials_file: /etc/alertmanager-secret/oncall_token

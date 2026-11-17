@@ -22,6 +22,13 @@ dependencies = [
     "httpx==0.28.1",
     # PGN parsing for game details (AGENT.md stack; package name of python-chess).
     "chess==1.11.2",
+    # OpenTelemetry: metrics, traces and logs exported over OTLP/HTTP.
+    "opentelemetry-api==1.45.2",
+    "opentelemetry-sdk==1.45.2",
+    "opentelemetry-exporter-otlp-proto-http==1.45.2",
+    "opentelemetry-instrumentation-fastapi==0.66b2",
+    "opentelemetry-instrumentation-httpx==0.66b2",
+    "opentelemetry-instrumentation-logging==0.66b2",
 ]
 
 [project.optional-dependencies]

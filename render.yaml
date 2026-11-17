@@ -18,7 +18,10 @@ services:
     dockerfilePath: ./Dockerfile
     plan: free
     healthCheckPath: /health
-    autoDeploy: true
+    # Production is promoted ONLY by .github/workflows/promote.yml, which calls
+    # the Render API with an explicit commitId after a green CI run for that
+    # SHA. A plain push to the branch must not deploy production.
+    autoDeploy: false
     envVars:
       - key: APP_ENV
         value: production
@@ -32,6 +35,25 @@ services:
         value: "1"
       - key: STOCKFISH_PATH
         value: /usr/games/stockfish
+      # --- OpenTelemetry -----------------------------------------------------
+      # Names and sampling are safe to commit. The endpoint and headers are
+      # credentials for Grafana Cloud (or another OTLP backend): set them in the
+      # Render dashboard, never in this file. With OTEL_ENABLED unset the app
+      # runs without exporters.
+      - key: OTEL_SERVICE_NAME
+        value: chesspulse
+      - key: OTEL_ENABLED
+        sync: false
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false
+      - key: OTEL_EXPORTER_OTLP_HEADERS
+        sync: false
+      - key: OTEL_TRACES_SAMPLER_ARG
+        value: "0.1"
+      - key: OTEL_METRIC_EXPORT_INTERVAL_MS
+        value: "30000"
+      - key: OTEL_LOGS_ENABLED
+        value: "true"
 
 databases:
   - name: chesspulse-db

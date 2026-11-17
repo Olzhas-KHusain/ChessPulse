@@ -1,7 +1,9 @@
 name: CI/CD
 
 # Backend tests, frontend tests, Playwright e2e against the composed stack,
-# then build/push the image and redeploy on every pushed commit.
+# observability configuration checks, then build/push the image on every pushed
+# commit. A push NEVER deploys production: promotion is the manual
+# `.github/workflows/promote.yml` workflow.
 
 on:
   push:
@@ -112,10 +114,36 @@ jobs:
           name: playwright-traces
           path: frontend/test-results/
 
-  deploy:
-    name: build, push GHCR and redeploy
+  observability:
+    name: observability config + on-call tests
     runs-on: ubuntu-latest
-    needs: [e2e]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the configuration checker's only dependency
+        run: pip install "pyyaml==6.0.2"
+      - name: Validate YAML, dashboard, metrics and alert runbooks
+        run: python scripts/check-observability-config.py
+      - name: Install on-call responder dependencies
+        run: >-
+          pip install
+          -r observability/oncall/requirements.txt
+          -r observability/oncall/requirements-dev.txt
+      - name: Lint the configuration checker
+        run: ruff check scripts/check-observability-config.py
+      - name: Lint, type-check and test the on-call responder
+        working-directory: observability/oncall
+        run: |
+          ruff check .
+          mypy app.py
+          pytest -q
+
+  deploy:
+    name: build and push image (development only)
+    runs-on: ubuntu-latest
+    needs: [e2e, observability]
     if: github.event_name == 'push'
     permissions:
       contents: read
@@ -140,14 +168,15 @@ jobs:
             ${{ env.IMAGE }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Redeploy (Render / Railway deploy hook)
-        # Optional: set RENDER_DEPLOY_HOOK or RAILWAY_DEPLOY_HOOK in repo secrets.
-        # The image reference used by the PaaS service is ghcr.io/.../chesspulse:latest.
+      - name: Redeploy development (Render development hook / Railway)
+        # Optional and development-only: set RENDER_DEV_DEPLOY_HOOK (or
+        # RAILWAY_DEPLOY_HOOK) in repo secrets. Production has its own manual
+        # promote workflow and `autoDeploy: false` in render.yaml.
         env:
-          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK || secrets.RAILWAY_DEPLOY_HOOK }}
+          HOOK: ${{ secrets.RENDER_DEV_DEPLOY_HOOK || secrets.RAILWAY_DEPLOY_HOOK }}
         if: env.HOOK != ''
         run: curl -fsS -X POST "${HOOK}"
-      - name: Redeploy (self-hosted VM via CloudFormation template)
+      - name: Self-hosted VM note
         # AWS deployment runs from infra/: see infra/README.md. Kept as a manual
         # step (oidc/data-id) so CI never needs long-lived AWS keys.
-        run: echo "Deploy hook done; AWS stack update documented in infra/README.md"
+        run: echo "Image pushed; production promotion is .github/workflows/promote.yml"

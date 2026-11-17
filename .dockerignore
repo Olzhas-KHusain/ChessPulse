@@ -13,3 +13,4 @@ docs
 cache
 *.md
 .env
+.env.*

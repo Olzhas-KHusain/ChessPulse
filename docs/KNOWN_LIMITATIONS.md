@@ -92,4 +92,29 @@
   Vienna after `1.e4 e5 2.Nc3 Nf6 3.f4` can be reported as King's Gambit Accepted +
   Schallopp Defense).
 - Accounts, authentication, private Chess.com data.
-- Production monitoring and alerting beyond the container healthchecks.
+- ~~Production monitoring and alerting beyond the container healthchecks.~~ Implemented as
+  an opt-in OpenTelemetry pipeline; see `docs/observability.md` and the limits below.
+
+## Observability and environments
+
+- **Telemetry is opt-in.** `OTEL_ENABLED=false` by default. A deployment can be healthy
+  and completely unobserved; enabling it requires a reachable OTLP endpoint.
+- **The free Render tier cannot host the stack.** Prometheus, Alertmanager, Tempo, Loki
+  and Grafana need an always-on host. Render Free production can only *export* OTLP to a
+  free external backend (for example Grafana Cloud), and then the alert rules in
+  `observability/prometheus/alerts.yml` are not the ones evaluating.
+- **Metric names depend on the Collector version.** The alert rules and dashboard assume
+  the OTel → Prometheus translation documented in `docs/observability.md`; a major
+  Collector upgrade can rename a series. Verify with
+  `curl :8889/metrics | grep '^chesspulse_'`.
+- **No user-level metrics.** Labels are deliberately bounded to routes, error codes and
+  outcomes, so per-player dashboards are not available.
+- **The on-call responder is not paging.** It posts a diagnosis to a webhook and logs
+  it; there is no phone/SMS escalation and no incident history.
+- **The LLM is optional and non-deterministic.** Without a key the responder uses fixed
+  runbooks; with a key the model may add advice, and its output is not validated beyond
+  length limits. An LLM failure falls back to the runbook.
+- **Retention is short on purpose** (Prometheus 7 days, Tempo 24 hours, Loki 72 hours)
+  to fit a single free-tier VM.
+- **Development and production Compose stacks are separate databases.** A fix applied to
+  one is not present in the other until it is promoted.

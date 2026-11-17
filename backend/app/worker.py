@@ -22,6 +22,7 @@ from app.db.session import build_engine, build_session_factory
 from app.engine.runtime import resolve_engine_path, stockfish_factory
 from app.engine.uci import EngineUnavailable
 from app.engine.worker import requeue_stale_jobs, run_once
+from app.observability import configure_observability
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -59,6 +60,9 @@ def main(argv: list[str] | None = None) -> int:
     engine = build_engine(settings)
     session_factory = build_session_factory(engine)
     engine_factory = stockfish_factory(settings)
+    observability = configure_observability(
+        None, settings, service_name=f"{settings.otel_service_name}-worker"
+    )
 
     with session_factory() as session:
         requeued = requeue_stale_jobs(session, settings.analysis_stale_job_minutes)
@@ -81,6 +85,7 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         return 0
     finally:
+        observability.shutdown()
         engine.dispose()
 
 

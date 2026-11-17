@@ -1,0 +1,155 @@
+# ChessPulse alert rules.
+#
+# Metric names are what the OpenTelemetry Collector's Prometheus exporter
+# produces from the instruments in backend/app/observability/metrics.py:
+# dots become underscores, counters get `_total`, and a histogram unit of `s`
+# adds `_seconds` before `_bucket`/`_sum`/`_count`.
+#
+# Confirm the live names before trusting an alert:
+#   curl -s http://127.0.0.1:8889/metrics | grep '^chesspulse_'
+#
+# Every alert carries a `runbook` annotation pointing at the section of
+# docs/observability.md the on-call responder also uses.
+
+groups:
+  - name: chesspulse-http
+    rules:
+      - alert: ChessPulseHighErrorRate
+        expr: |
+          (
+            sum(rate(chesspulse_http_server_requests_total{http_response_status_code=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(chesspulse_http_server_requests_total[5m])), 0.001)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: chesspulse
+        annotations:
+          summary: "ChessPulse returns 5xx for more than 5% of requests"
+          description: >-
+            The API error ratio is {{ $value | humanizePercentage }} over the last
+            5 minutes. Database, migration and unhandled-error failures surface
+            here. Provider timeouts normally surface as 502/504 and also count.
+          runbook: "docs/observability.md#high-error-rate"
+
+      - alert: ChessPulseHighLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(chesspulse_http_server_duration_seconds_bucket[5m]))
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+          service: chesspulse
+        annotations:
+          summary: "ChessPulse p95 HTTP latency is above 2 seconds"
+          description: >-
+            p95 latency is {{ $value | humanizeDuration }}. A cold Render free
+            instance and a first Chess.com refresh are legitimately slow; sustained
+            latency with traffic is not.
+          runbook: "docs/observability.md#high-latency"
+
+  - name: chesspulse-provider
+    rules:
+      - alert: ChessPulseProviderFailureRate
+        expr: |
+          (
+            sum(rate(chesspulse_provider_requests_total{chesspulse_provider_outcome!="success"}[10m]))
+            /
+            clamp_min(sum(rate(chesspulse_provider_requests_total[10m])), 0.001)
+          ) > 0.3
+        for: 10m
+        labels:
+          severity: warning
+          service: chesspulse
+          dependency: chess-com
+        annotations:
+          summary: "More than 30% of Chess.com requests are failing"
+          description: >-
+            Upstream failures (timeouts, 429, 5xx, invalid responses) are at
+            {{ $value | humanizePercentage }}. ChessPulse serves cached data as
+            `stale`; do not redeploy to fix a provider outage.
+          runbook: "docs/observability.md#provider-failures"
+
+      - alert: ChessPulseCacheRefreshFailing
+        expr: |
+          sum(increase(chesspulse_cache_refreshes_total{chesspulse_cache_outcome!="succeeded"}[15m])) >= 3
+        for: 5m
+        labels:
+          severity: warning
+          service: chesspulse
+        annotations:
+          summary: "Three or more dataset refreshes failed in 15 minutes"
+          description: >-
+            {{ $value }} failed refreshes. Check whether the failure is a provider
+            error (`chesspulse_cache_outcome` label), the database, or ingestion.
+            Data rows are never deleted by a failed refresh.
+          runbook: "docs/observability.md#cache-refresh-failures"
+
+  - name: chesspulse-engine
+    rules:
+      - alert: ChessPulseAnalysisFailureRate
+        expr: |
+          (
+            sum(rate(chesspulse_analysis_jobs_total{chesspulse_analysis_outcome="failed"}[15m]))
+            /
+            clamp_min(sum(rate(chesspulse_analysis_jobs_total[15m])), 0.001)
+          ) > 0.3
+        for: 10m
+        labels:
+          severity: warning
+          service: chesspulse
+        annotations:
+          summary: "More than 30% of engine analysis jobs are failing"
+          description: >-
+            Analysis failures are at {{ $value | humanizePercentage }}. Check
+            Stockfish availability (`STOCKFISH_PATH`), engine timeouts and the
+            worker log. `retry` outcomes are not counted as failures.
+          runbook: "docs/observability.md#analysis-failures"
+
+      - alert: ChessPulseBoardErrors
+        expr: |
+          sum(increase(chesspulse_board_operations_total{chesspulse_board_outcome="error"}[10m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: chesspulse
+        annotations:
+          summary: "The free analysis board returns engine errors"
+          description: >-
+            {{ $value }} board operations failed in 10 minutes. A 503
+            ENGINE_UNAVAILABLE means the Stockfish binary is missing or not
+            executable in the image.
+          runbook: "docs/observability.md#board-errors"
+
+  - name: chesspulse-platform
+    rules:
+      - alert: ChessPulseMetricsMissing
+        expr: up{job="chesspulse-app"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: chesspulse
+        annotations:
+          summary: "Prometheus cannot scrape ChessPulse application metrics"
+          description: >-
+            The Collector's Prometheus endpoint is down or the collector lost its
+            OTLP connection. The application may still be serving traffic; this
+            alert is about observability blindness, not necessarily an outage.
+          runbook: "docs/observability.md#metrics-missing"
+
+      - alert: ChessPulseNoTraffic
+        expr: sum(increase(chesspulse_http_server_requests_total[30m])) == 0
+        for: 30m
+        labels:
+          severity: info
+          service: chesspulse
+        annotations:
+          summary: "ChessPulse served no HTTP requests in 30 minutes"
+          description: >-
+            Expected while a Render free instance sleeps. If a user reports an
+            outage and this alert is firing, the instance is asleep or the
+            collector stopped receiving data.
+          runbook: "docs/observability.md#no-traffic"

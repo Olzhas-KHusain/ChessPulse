@@ -38,10 +38,13 @@ frontend/    React + Vite application (src/)
 docs/specs/  Feature specifications (database-schema.md, api-*.md)
 roles/       Role operating manuals (pm, devops-engineer, ui-ux-developer)
 docker-compose.yml   Full stack: app (static FE + API) + worker + db
+observability/       OTel Collector, Prometheus, Alertmanager, Tempo, Loki,
+                     Grafana dashboard and the AI on-call responder
 infra/               AWS CloudFormation template + deploy notes
-render.yaml          Render blueprint (PaaS)
-.github/workflows/   CI/CD (tests → e2e → build → deploy)
+render.yaml          Render blueprint (PaaS, manual production promotion)
+.github/workflows/   CI (tests → e2e → observability) + manual promote.yml
 .env.example         Configuration template (copy to .env)
+.env.development.example / .env.production.example   Environment templates
 ```
 
 ## Prerequisites
@@ -53,8 +56,11 @@ render.yaml          Render blueprint (PaaS)
 ## First-time setup
 
 ```bash
-# 1. Configuration (never commit .env)
+# 1. Configuration (never commit .env or .env.development / .env.production)
 cp .env.example .env
+# Or use a separated Compose environment:
+#   cp .env.development.example .env.development
+#   docker compose --env-file .env.development up -d --build --wait
 
 # 2. Database
 docker compose up -d db
@@ -285,14 +291,16 @@ with contact information, as Chess.com recommends, for example
 ## Containerization and deployment
 
 The authoritative runbook — rules, environments, release procedure, verification,
-operations and troubleshooting — is [`docs/deployment.md`](docs/deployment.md). The
-summary below is a quick start, not a substitute.
+operations and troubleshooting — is [`docs/deployment.md`](docs/deployment.md).
+Observability (OpenTelemetry, dashboard, alerts, AI on-call) and the
+development/production split are in [`docs/observability.md`](docs/observability.md).
+The summary below is a quick start, not a substitute.
 
 One Dockerfile builds the frontend and serves it plus the API from a single image:
 
 ```bash
 docker build -t chesspulse/app .
-docker compose up -d --build --wait   # app + worker + db (PostgreSQL 16)
+docker compose --env-file .env.development up -d --build --wait   # app + worker + db
 curl http://localhost:8000/health     # app serves the SPA and the API on :8000
 ```
 
@@ -300,13 +308,20 @@ curl http://localhost:8000/health     # app serves the SPA and the API on :8000
   (`alembic upgrade head`) run in the app entrypoint, so the schema is always
   current. `app_worker` runs Stockfish from the Debian package built into the
   image (`STOCKFISH_PATH=/usr/games/stockfish`).
+- Development and production Compose stacks use different project names, volumes
+  and ports; see the environment templates.
 
 Deployment targets:
 
 - **CI/CD**: `.github/workflows/ci.yml` — backend (ruff, mypy, pytest on a
   Postgres service), frontend (lint, typecheck, Vitest, build), Playwright e2e
-  against the composed stack, then build + push to GHCR and redeploy via a
-  deploy hook on every pushed commit.
+  against the composed stack, observability config checks and on-call tests, then
+  build + push to GHCR and optionally redeploy the **development** environment.
+  A push never deploys production.
+- **Production promotion**: `.github/workflows/promote.yml` (manual
+  `workflow_dispatch`, `production` Environment approval) verifies a green CI run
+  for the exact SHA and deploys it on Render via the API. `render.yaml` sets
+  `autoDeploy: false`.
 - **PaaS**: `render.yaml` blueprint using Render's Free plans (web + PostgreSQL,
   no paid features). Free limits: the service sleeps after 15 idle minutes, the
   database is 1 GB and expires after 30 days. Render has no free worker plan, so

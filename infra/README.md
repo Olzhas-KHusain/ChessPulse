@@ -30,6 +30,29 @@ The instance installs Docker, clones the repository and runs
 Change `POSTGRES_PASSWORD` in `/opt/chesspulse/.env` on the instance before
 exposing anything publicly.
 
+### Observability on the VM
+
+The instance is the only free host that can run the full observability stack
+(Render Free cannot). On the instance:
+
+```bash
+cd /opt/chesspulse
+docker compose --env-file .env -f observability/docker-compose.observability.yml up -d --wait
+```
+
+Then set `OTEL_ENABLED=true` and
+`OTEL_EXPORTER_OTLP_ENDPOINT=http://host.docker.internal:4318` in `.env`, and
+restart `app` and `worker`. Keep every observability port bound to `127.0.0.1`;
+reach Grafana through an SSH tunnel (`ssh -L 3000:127.0.0.1:3000 ...`) rather
+than opening it in the security group. Details:
+[`docs/observability.md`](../docs/observability.md).
+
+`t3.micro` has 1 GB of RAM. The collector is limited to 400 MiB with a 500 MiB
+spike allowance, retention is short (Prometheus 7 days, Tempo 24 h, Loki 72 h),
+and Stockfish plus the observability stack on one instance is tight. If the
+instance swaps, reduce retention before increasing the instance size (which is no
+longer free).
+
 ## GCP alternative (Terraform)
 
 Same shape on GCP: an e2-micro (always-free) VM with Docker and the compose

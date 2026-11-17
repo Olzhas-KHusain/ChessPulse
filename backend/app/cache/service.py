@@ -17,6 +17,7 @@ Rules (spec §12-13, AGENT.md §6):
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import replace
@@ -34,6 +35,7 @@ from app.cache.policy import (
 )
 from app.core.config import Settings
 from app.models import CacheMetadata, CacheResourceType, CacheStatus, Provider
+from app.observability.metrics import record_cache_refresh, record_ingestion
 from app.providers.base import GameDataProvider
 from app.providers.chess_com.usernames import normalize_username
 from app.providers.errors import ProviderError, ProviderErrorCode
@@ -110,11 +112,13 @@ class PlayerDatasetCache:
         base = self._state_from(key, previous, now)
         self._cache.save(replace(base, status=CacheStatus.REFRESHING))
         self._session.commit()
+        started_at = time.perf_counter()
         try:
             report = self._ingestion_factory(self._session, self._provider).ingest_player(
                 username, now, window_days=self._window_days
             )
         except ProviderError as error:
+            record_cache_refresh(error.code.value, time.perf_counter() - started_at)
             retry_at = now + max(self._cooldown, timedelta(seconds=error.retry_after or 0))
             failed = self._cache.save(
                 replace(
@@ -146,6 +150,8 @@ class PlayerDatasetCache:
             )
         )
         self._session.commit()
+        record_cache_refresh("succeeded", time.perf_counter() - started_at)
+        record_ingestion(report.eligible_games, report.complete)
         self._log(
             username,
             "refresh_succeeded",

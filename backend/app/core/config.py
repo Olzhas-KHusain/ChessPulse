@@ -50,6 +50,20 @@ class Settings(BaseSettings):
     database_url: SecretStr
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
 
+    # --- Observability (OpenTelemetry) ----------------------------------------
+    # Off by default so tests and simple local runs never need a collector.
+    otel_enabled: bool = False
+    otel_service_name: str = "chesspulse-api"
+    # OTLP/HTTP base URL, for example http://localhost:4318 or a Grafana Cloud
+    # gateway. Empty while enabled means "start, log a warning, export nothing".
+    otel_exporter_otlp_endpoint: str = ""
+    # Standard OTEL_EXPORTER_OTLP_HEADERS form: key=value,key2=value2.
+    otel_exporter_otlp_headers: SecretStr = SecretStr("")
+    # Head sampling ratio for new traces. Production should stay well below 1.0.
+    otel_traces_sampler_arg: float = Field(default=1.0, ge=0.0, le=1.0)
+    otel_metric_export_interval_ms: int = Field(default=15000, ge=1000, le=300000)
+    otel_logs_enabled: bool = True
+
     # --- Chess.com provider -----------------------------------------------------
     # Chess.com recommends a recognizable User-Agent that includes contact information.
     chess_com_user_agent: str = f"ChessPulse/{__version__}"
@@ -119,6 +133,22 @@ class Settings(BaseSettings):
         if not 1 <= len(value) <= 256 or not all(" " <= ch <= "~" for ch in value):
             raise ValueError("must be 1-256 printable ASCII characters")
         return value
+
+    @field_validator("otel_service_name")
+    @classmethod
+    def _validate_otel_service_name(cls, value: str) -> str:
+        value = value.strip()
+        if not 1 <= len(value) <= 128 or not all(" " <= ch <= "~" for ch in value):
+            raise ValueError("must be 1-128 printable ASCII characters")
+        return value
+
+    @field_validator("otel_exporter_otlp_endpoint")
+    @classmethod
+    def _validate_otel_endpoint(cls, value: str) -> str:
+        value = value.strip()
+        if value and not value.startswith(("http://", "https://")):
+            raise ValueError("must be an http:// or https:// URL")
+        return value.rstrip("/")
 
     @field_validator("cors_origins", mode="before")
     @classmethod
