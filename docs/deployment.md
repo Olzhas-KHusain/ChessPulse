@@ -641,6 +641,15 @@ takes roughly 50 seconds to wake. Retry for at least 90 seconds before escalatin
 The dump must be taken **before** the old database is deleted. Keep the old database and
 the dump until the new one passes verification.
 
+**Decision for `chesspulse-db` (2026-11-24).** The free database expires on 2026-12-04
+and is not renewed. The dump taken on 2026-11-24 was restored and verified
+(`Restore OK: image=postgres:18-alpine, alembic=0004, public tables=8`, 679 players,
+1905 games), so the data survives the deletion outside git. No second free database is
+created while the old one is alive. After 2026-12-04 production has no database and
+database-backed endpoints return `500` until the cycle below is run again: dump (if any
+data appeared) → recreate a free database → restore → update `DATABASE_URL` → redeploy
+and verify section 8.
+
 A `500` that appears "after a month" is usually an expired database, not a code
 regression.
 
