@@ -590,10 +590,13 @@ Render free database:
 # Reads the server version first and uses a matching pg_dump image.
 powershell -ExecutionPolicy Bypass -File scripts/render-db-backup.ps1
 
-# Restores the dump into a throw-away container of the same major version and
-# checks alembic_version and the public table count.
+# Restores the newest *.dump from the repository root into a throw-away container
+# of the same major version and checks alembic_version and the public table count.
+powershell -ExecutionPolicy Bypass -File scripts/verify-db-backup.ps1
+
+# A specific dump instead: pass its name, not the <timestamp> placeholder.
 powershell -ExecutionPolicy Bypass -File scripts/verify-db-backup.ps1 `
-  -DumpFile .\chesspulse-render-<timestamp>.dump
+  -DumpFile .\chesspulse-render-20261124-102550.dump
 ```
 
 `pg_dump` refuses to dump a server newer than itself (`server version mismatch`).
@@ -607,7 +610,10 @@ check runs in a matching-version container instead of the local Compose database
 The restore check needs only Docker: it starts `chesspulse-restore-test`, restores,
 prints `Restore OK: image=..., alembic=..., public tables=...` and removes the
 container. On failure the container is kept for inspection. It does not read `.env`
-and never touches the application database.
+and never touches the application database. Wait for a real `Restore OK`; a failure
+right after the container starts (`server closed the connection unexpectedly`) means
+the client attached to the image's init-time server, which is retired a moment later.
+
 
 Rules:
 

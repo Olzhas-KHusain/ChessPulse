@@ -17,7 +17,11 @@
 
 .PARAMETER DumpFile
     Path to a custom-format dump produced by scripts/render-db-backup.ps1 or
-    `pg_dump -Fc`.
+    `pg_dump -Fc`. Omit it (or use -Latest) to verify the newest `*.dump` in the
+    repository root.
+
+.PARAMETER Latest
+    Verify the newest `*.dump` in the repository root instead of a named file.
 
 .PARAMETER PostgresImage
     Override the restore image. Defaults to the `image=` value in `<dump>.info`.
@@ -34,16 +38,19 @@
         -DumpFile .\chesspulse-render-20261124-120000.dump
 
 .EXAMPLE
+    powershell -ExecutionPolicy Bypass -File scripts/verify-db-backup.ps1
+
+.EXAMPLE
     powershell -ExecutionPolicy Bypass -File scripts/verify-db-backup.ps1 `
         -DumpFile .\chesspulse-render-20261124-120000.dump -PostgresImage postgres:18-alpine
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$DumpFile,
+    [string]$DumpFile = "",
 
     [string]$PostgresImage = "",
     [string]$TestDatabase = "chesspulse_restore_test",
+    [switch]$Latest,
     [switch]$KeepTestDatabase
 )
 
@@ -64,8 +71,28 @@ try {
         throw "Docker is not running. Start Docker Desktop and retry."
     }
 
+    if (-not $DumpFile -or $Latest) {
+        $newest = Get-ChildItem -Path $repoRoot -Filter '*.dump' -File |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+        if (-not $newest) {
+            throw "No *.dump file found in $repoRoot. Run scripts/render-db-backup.ps1 first."
+        }
+        $DumpFile = $newest.FullName
+        Write-Host "Verifying the newest dump: $($newest.Name) $($newest.Length) bytes"
+    }
+    elseif ($DumpFile -match '[<>]') {
+        # Pasted straight from the docs without replacing the placeholder.
+        throw "'$DumpFile' is a documentation placeholder. Run without -DumpFile to " +
+        "verify the newest *.dump in $repoRoot, or pass the real file name."
+    }
+
     if (-not (Test-Path $DumpFile)) {
-        throw "Dump not found: $DumpFile"
+        $available = @(Get-ChildItem -Path $repoRoot -Filter '*.dump' -File |
+                Sort-Object LastWriteTime -Descending |
+                Select-Object -ExpandProperty Name)
+        $availableText = if ($available.Length -gt 0) { $available -join ', ' } else { "none" }
+        throw "Dump not found: $DumpFile. Available in ${repoRoot}: $availableText"
     }
     $dumpPath = (Resolve-Path $DumpFile).Path
     $dumpDir = Split-Path -Parent $dumpPath
@@ -97,17 +124,26 @@ try {
         throw "Could not start the temporary container from $image."
     }
 
+    # The official image starts a throw-away server during initdb, then stops it
+    # and starts the real one. pg_isready succeeds against that temp server too, so
+    # a single check can win the race and then lose the connection mid-restore
+    # ("server closed the connection unexpectedly"). Require the check to hold
+    # across a pause that outlives the init-phase shutdown.
     $ready = $false
     for ($i = 1; $i -le 30; $i++) {
         docker exec $container pg_isready -U postgres -d $TestDatabase *> $null
         if ($LASTEXITCODE -eq 0) {
-            $ready = $true
-            break
+            Start-Sleep -Seconds 3
+            docker exec $container pg_isready -U postgres -d $TestDatabase *> $null
+            if ($LASTEXITCODE -eq 0) {
+                $ready = $true
+                break
+            }
         }
         Start-Sleep -Seconds 2
     }
     if (-not $ready) {
-        throw "The temporary PostgreSQL container did not become ready."
+        throw "The temporary PostgreSQL container did not become ready. Container '$container' was kept for inspection."
     }
 
     docker exec $container pg_restore -U postgres -d $TestDatabase `
