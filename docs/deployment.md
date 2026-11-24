@@ -587,23 +587,32 @@ Render free database:
 
 ```powershell
 # Prompts for the external URL without putting it in shell history.
+# Reads the server version first and uses a matching pg_dump image.
 powershell -ExecutionPolicy Bypass -File scripts/render-db-backup.ps1
 
-# Restores the dump into a throw-away local database and checks alembic_version.
+# Restores the dump into a throw-away container of the same major version and
+# checks alembic_version and the public table count.
 powershell -ExecutionPolicy Bypass -File scripts/verify-db-backup.ps1 `
   -DumpFile .\chesspulse-render-<timestamp>.dump
 ```
 
-The scripts use a `pg_dump`/`pg_restore` container of the same major version as the
-Compose database (16.9). If the Render server is a different major version, pass the
-matching image to the backup script, for example
-`-PostgresImage postgres:17-alpine`. The restore check deliberately fails on a version
-mismatch or a broken dump.
+`pg_dump` refuses to dump a server newer than itself (`server version mismatch`).
+The backup script therefore reads `server_version_num` first and picks
+`postgres:<major>-alpine` on its own; `-PostgresImage` overrides it and must be the
+server major version or newer. It also writes `<dump>.info` with the image tag, so the
+verify script restores with the matching `pg_restore`. An older `pg_restore` cannot
+read a newer archive (`unsupported version (1.16) in file header`), which is why the
+check runs in a matching-version container instead of the local Compose database.
+
+The restore check needs only Docker: it starts `chesspulse-restore-test`, restores,
+prints `Restore OK: image=..., alembic=..., public tables=...` and removes the
+container. On failure the container is kept for inspection. It does not read `.env`
+and never touches the application database.
 
 Rules:
 
 - Treat the external URL as a secret: do not paste it into an issue, a document or a
-  chat, and do not commit the dump.
+  chat, and do not commit the dump or its `.info` file.
 - Take the dump before any destructive operation, and test the restore. A backup that has
   never been restored is not a verified backup.
 - The Render free plan is not a backup service. Expiry and deletion are real data-loss

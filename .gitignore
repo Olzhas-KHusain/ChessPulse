@@ -35,3 +35,4 @@ frontend/blob-report/
 *.sqlite3
 *.db
 *.dump
+*.dump.info
